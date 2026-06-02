@@ -147,6 +147,19 @@ The repeatable check for this is:
 npm run verify:auth0
 ```
 
+If an Auth0 Management API token is available, patch the current client in one
+step:
+
+```sh
+AUTH0_MANAGEMENT_TOKEN=... npm run patch:auth0
+```
+
+Or use an Auth0 machine-to-machine app with `update:clients` access:
+
+```sh
+AUTH0_MGMT_CLIENT_ID=... AUTH0_MGMT_CLIENT_SECRET=... npm run patch:auth0
+```
+
 Allowed Logout URLs:
 
 ```text
