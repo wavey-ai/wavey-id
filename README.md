@@ -55,6 +55,12 @@ Zone:
 wavey.ai
 ```
 
+DNS:
+
+```text
+CNAME id.wavey.ai -> wavey.ai, proxied
+```
+
 Deploy:
 
 ```sh
@@ -112,16 +118,22 @@ Worker config:
 
 ```text
 AUTH0_DOMAIN=wavey.eu.auth0.com
-AUTH0_CLIENT_ID=kbYi74h32G4TbrTVre2mQOO1ZJl3i0wF
+AUTH0_CLIENT_ID=QdLiUA5RC81Q9o9itEAnh4CummEBksZ3
 AUTH0_CLIENT_SECRET=<set as Cloudflare secret>
 AUTH0_SCOPE=openid profile email
 ```
+
+The Worker must use a client secret that belongs to this exact client ID. The
+current deployment uses the client pair already present in `io/.env`.
 
 Allowed Callback URLs:
 
 ```text
 https://id.wavey.ai/oauth2/callback
 ```
+
+The browser login flow will fail with Auth0 `Callback URL mismatch` until this
+callback is present on the Auth0 application.
 
 Allowed Logout URLs:
 
