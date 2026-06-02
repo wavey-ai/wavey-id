@@ -70,6 +70,12 @@ npm run deploy:dry-run
 npm run deploy
 ```
 
+Auth0 callback smoke test:
+
+```sh
+npm run verify:auth0
+```
+
 Secrets:
 
 ```sh
@@ -134,6 +140,12 @@ https://id.wavey.ai/oauth2/callback
 
 The browser login flow will fail with Auth0 `Callback URL mismatch` until this
 callback is present on the Auth0 application.
+
+The repeatable check for this is:
+
+```sh
+npm run verify:auth0
+```
 
 Allowed Logout URLs:
 
