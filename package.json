@@ -1,0 +1,21 @@
+{
+  "name": "@wavey-ai/wavey-id",
+  "version": "0.1.0",
+  "description": "Shared id.wavey.ai Cloudflare Worker for Auth0-backed Wavey login.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/worker.js"
+  },
+  "scripts": {
+    "check": "node --check src/worker.js && node --test src/worker.test.mjs",
+    "dev": "wrangler dev --config wrangler.jsonc",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
+    "deploy:dry-run": "wrangler deploy --config wrangler.jsonc --dry-run",
+    "types": "wrangler types --config wrangler.jsonc src/worker-configuration.d.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "wrangler": "^4.96.0"
+  }
+}
