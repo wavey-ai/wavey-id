@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wavey-id-worker",
+  "main": "../zeroth/crates/zeroth-worker/build/worker/shim.mjs",
+  "compatibility_date": "2026-06-04",
+  "account_id": "c57bb20727aa3564966d2bb693abddce",
+  "workers_dev": false,
+  "observability": {
+    "enabled": true
+  },
+  "routes": [
+    {
+      "pattern": "id.wavey.ai/*",
+      "zone_name": "wavey.ai"
+    }
+  ],
+  "vars": {
+    "PUBLIC_BASE_URL": "https://id.wavey.ai",
+    "PRODUCT_NAME": "Wavey ID",
+    "SESSION_COOKIE_NAME": "wavey_id_session",
+    "SESSION_COOKIE_DOMAIN": ".wavey.ai",
+    "TX_COOKIE_NAME": "wavey_id_tx",
+    "DEFAULT_LOGIN_CLIENT_ID": "wavey-browser",
+    "APPLE_CLIENT_ID": "replace-with-sign-in-with-apple-service-id",
+    "GOOGLE_CLIENT_ID": "replace-with-google-oauth-client-id",
+    "SPOTIFY_CLIENT_ID": "replace-with-spotify-oauth-client-id"
+  },
+  "d1_databases": [
+    {
+      "binding": "ZEROTH_DB",
+      "database_name": "wavey-id-zeroth",
+      "database_id": "a9c41029-3255-47e9-aa62-7091afb787b9"
+    }
+  ],
+  "build": {
+    "command": "cd ../zeroth/crates/zeroth-worker && worker-build --release"
+  }
+}
