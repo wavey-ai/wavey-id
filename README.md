@@ -555,24 +555,26 @@ Archived Auth0 deploy:
 ```sh
 npm install
 npm run legacy:auth0:check
-npm run legacy:auth0:deploy:dry-run
-npm run legacy:auth0:deploy
+ALLOW_LEGACY_AUTH0=1 npm run legacy:auth0:deploy:dry-run
+ALLOW_LEGACY_AUTH0=1 npm run legacy:auth0:deploy
 ```
 
 Do not use the archived Auth0 deploy for `id.wavey.ai`; the route belongs to
-the Zeroth deployment in `wrangler.zeroth.jsonc`.
+the Zeroth deployment in `wrangler.zeroth.jsonc`. Archived Auth0 commands that
+touch live Auth0 or Cloudflare state fail unless `ALLOW_LEGACY_AUTH0=1` is set
+for that invocation.
 
 Auth0 callback smoke test:
 
 ```sh
-npm run legacy:auth0:verify
+ALLOW_LEGACY_AUTH0=1 npm run legacy:auth0:verify
 ```
 
 Secrets:
 
 ```sh
-wrangler secret put AUTH0_CLIENT_SECRET --config wrangler.jsonc
-wrangler secret put COOKIE_SECRET --config wrangler.jsonc
+ALLOW_LEGACY_AUTH0=1 AUTH0_CLIENT_SECRET=... COOKIE_SECRET=... \
+  bash scripts/set-worker-secrets.sh
 ```
 
 `COOKIE_SECRET` should be a long random value:
@@ -639,20 +641,20 @@ callback is present on the Auth0 application.
 The repeatable check for this is:
 
 ```sh
-npm run legacy:auth0:verify
+ALLOW_LEGACY_AUTH0=1 npm run legacy:auth0:verify
 ```
 
 If an Auth0 Management API token is available, patch the current client in one
 step:
 
 ```sh
-AUTH0_MANAGEMENT_TOKEN=... npm run legacy:auth0:patch
+ALLOW_LEGACY_AUTH0=1 AUTH0_MANAGEMENT_TOKEN=... npm run legacy:auth0:patch
 ```
 
 Or use an Auth0 machine-to-machine app with `update:clients` access:
 
 ```sh
-AUTH0_MGMT_CLIENT_ID=... AUTH0_MGMT_CLIENT_SECRET=... npm run legacy:auth0:patch
+ALLOW_LEGACY_AUTH0=1 AUTH0_MGMT_CLIENT_ID=... AUTH0_MGMT_CLIENT_SECRET=... npm run legacy:auth0:patch
 ```
 
 Allowed Logout URLs:

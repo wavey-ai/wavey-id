@@ -5,6 +5,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WRANGLER="${WRANGLER:-npx wrangler}"
 CONFIG="${CONFIG:-$ROOT/wrangler.jsonc}"
 
+if [[ "${ALLOW_LEGACY_AUTH0:-}" != "1" ]]; then
+  echo "archived Auth0 secret writes are disabled by default; set ALLOW_LEGACY_AUTH0=1 for this invocation" >&2
+  exit 1
+fi
+
 put_secret() {
   local name="$1"
   local value="${!name:-}"
