@@ -274,6 +274,18 @@ The probe calls Spotify's current-user profile endpoint `/v1/me`, checks that
 the profile returns HTTP 200 with `account_id` or legacy `id` for Zeroth account
 linking, and does not print the access token or profile identifiers.
 
+To inspect magic-link delivery, run:
+
+```sh
+npm run zeroth:email:status
+npm run zeroth:email:send-test
+```
+
+Cloudflare Email Service requires an active Workers Paid account plan. The email
+status script checks the account subscriptions, the `send_email` binding, sender
+restrictions, Email Sending DNS/status APIs, and live Zeroth magic-link delivery
+evidence without printing Cloudflare credentials or admin tokens.
+
 The output separates live issuer readiness from full Auth0 retirement. A
 `phase` of `zeroth_ready` means `id.wavey.ai` is serving the Zeroth issuer and
 active providers are usable. The `auth0_replacement` block is stricter: it

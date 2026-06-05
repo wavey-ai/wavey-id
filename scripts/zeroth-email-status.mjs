@@ -77,8 +77,12 @@ export async function emailStatusSummary({
     configBlockers.push("MAGIC_LINK_FROM is not allowed by send_email binding");
   }
 
+  const accountPlan = remote
+    ? await cloudflareWorkersPlanStatus({ config, env, fetchFn })
+    : null;
   const remoteStatus = remote
     ? {
+        account_plan: accountPlan,
         zones: commandStatus(
           runCommand("npx", ["wrangler@4.98.0", "email", "sending", "list"]),
         ),
@@ -144,6 +148,7 @@ export async function emailStatusSummary({
     },
     live: liveStatus,
     cloudflare_email: {
+      account_plan: remoteStatus?.account_plan || null,
       zones: remoteStatus?.zones || null,
       dns: remoteStatus?.dns || null,
       send: sendStatus,
@@ -285,8 +290,113 @@ function boundedStatusText(value, maxChars) {
   return `${text.slice(0, Math.max(0, maxChars - 3))}...`;
 }
 
+async function cloudflareWorkersPlanStatus({ config = {}, env = {}, fetchFn = globalThis.fetch }) {
+  const accountId = config?.account_id || env.CLOUDFLARE_ACCOUNT_ID || "";
+  if (!accountId) {
+    return skippedCommand("missing Cloudflare account_id");
+  }
+  if (typeof fetchFn !== "function") {
+    return skippedCommand("fetch unavailable");
+  }
+
+  const headers = cloudflareAuthHeaders(env);
+  if (!headers) {
+    return skippedCommand("missing Cloudflare API credential");
+  }
+
+  const response = await fetchFn(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/subscriptions`,
+    {
+      headers: {
+        ...headers,
+        Accept: "application/json",
+      },
+    },
+  );
+  let body = {};
+  try {
+    body = await response.json();
+  } catch (_error) {
+    body = {};
+  }
+  if (!response.ok || body?.success !== true) {
+    return {
+      ok: false,
+      status: response.status,
+      error: cloudflareApiError(body) || `HTTP ${response.status}`,
+    };
+  }
+
+  const subscriptions = Array.isArray(body.result)
+    ? body.result.map(safeSubscriptionSummary)
+    : [];
+  return {
+    ok: true,
+    status: response.status,
+    workers_paid: subscriptions.some(workersPaidSubscription),
+    subscriptions,
+  };
+}
+
+function cloudflareAuthHeaders(env = {}) {
+  if (env.CLOUDFLARE_API_TOKEN) {
+    return { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` };
+  }
+  if (env.CLOUDFLARE_API_KEY && env.CLOUDFLARE_EMAIL) {
+    return {
+      "X-Auth-Email": env.CLOUDFLARE_EMAIL,
+      "X-Auth-Key": env.CLOUDFLARE_API_KEY,
+    };
+  }
+  return null;
+}
+
+function safeSubscriptionSummary(subscription = {}) {
+  return {
+    state: subscription.state || null,
+    rate_plan: {
+      id: subscription.rate_plan?.id || null,
+      public_name: subscription.rate_plan?.public_name || null,
+      scope: subscription.rate_plan?.scope || null,
+    },
+  };
+}
+
+function workersPaidSubscription(subscription = {}) {
+  const state = String(subscription.state || "").toLowerCase();
+  if (!["paid", "provisioned", "trial"].includes(state)) {
+    return false;
+  }
+  const planId = String(subscription.rate_plan?.id || "").toLowerCase();
+  const planName = String(subscription.rate_plan?.public_name || "").toLowerCase();
+  const looksLikeWorkers = planId.includes("workers") || planName.includes("workers");
+  const looksFree = planId.includes("free") || planName.includes("free");
+  return looksLikeWorkers && !looksFree;
+}
+
+function cloudflareApiError(body = {}) {
+  const errors = Array.isArray(body.errors) ? body.errors : [];
+  return errors
+    .map((error) => {
+      const message = boundedStatusText(error?.message || "", 180);
+      return message
+        ? `${message}${error?.code ? ` [code: ${error.code}]` : ""}`
+        : "";
+    })
+    .find(Boolean) || "";
+}
+
 function remoteEmailBlockers(remoteStatus, sendStatus) {
   const blockers = [];
+  const accountPlan = remoteStatus?.account_plan;
+  if (accountPlan && !accountPlan.skipped && !accountPlan.ok) {
+    blockers.push(`Cloudflare account subscription check failed: ${accountPlan.error}`);
+  }
+  if (accountPlan?.ok && accountPlan.workers_paid === false) {
+    blockers.push(
+      "Cloudflare Email Service requires Workers Paid plan; account has no active Workers Paid subscription",
+    );
+  }
   if (remoteStatus?.zones && !remoteStatus.zones.ok) {
     blockers.push(`Cloudflare Email Sending zone listing failed: ${remoteStatus.zones.error}`);
   }
@@ -301,13 +411,19 @@ function remoteEmailBlockers(remoteStatus, sendStatus) {
 
 function emailNextActions(blockers, { remote, sendTest, zones, dns, send }) {
   const actions = [];
+  const missingWorkersPaid = blockers.some((blocker) =>
+    blocker.includes("requires Workers Paid plan"),
+  );
+  if (missingWorkersPaid) {
+    actions.push("enable Workers Paid for the Cloudflare account before using Email Service");
+  }
   if (blockers.some((blocker) => blocker.includes("delivery failed recently"))) {
     actions.push("repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link");
   }
-  if (zones && !zones.ok) {
+  if (zones && !zones.ok && !missingWorkersPaid) {
     actions.push("use a Cloudflare credential with Email Sending read permissions to inspect onboarding");
   }
-  if (dns && !dns.ok) {
+  if (dns && !dns.ok && !missingWorkersPaid) {
     actions.push("verify Email Sending DNS records for wavey.ai in the Cloudflare dashboard");
   }
   if (send && !send.ok) {

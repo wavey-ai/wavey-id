@@ -4,6 +4,7 @@ import test from "node:test";
 import { emailStatusSummary } from "./zeroth-email-status.mjs";
 
 const config = {
+  account_id: "account-123",
   vars: {
     PRODUCT_NAME: "Wavey ID",
     MAGIC_LINK_FROM: "login@wavey.ai",
@@ -59,6 +60,39 @@ test("email status captures Cloudflare Email Sending API failures", async () => 
     remote: true,
     sendTest: true,
     config,
+    env: {
+      CLOUDFLARE_API_KEY: "global-key",
+      CLOUDFLARE_EMAIL: "jamie@wavey.ai",
+    },
+    fetchFn: async (url, options) => {
+      assert.equal(
+        url,
+        "https://api.cloudflare.com/client/v4/accounts/account-123/subscriptions",
+      );
+      assert.equal(options.headers["X-Auth-Email"], "jamie@wavey.ai");
+      assert.equal(options.headers["X-Auth-Key"], "global-key");
+      return jsonResponse(200, {
+        success: true,
+        result: [
+          {
+            state: "Paid",
+            rate_plan: {
+              id: "free",
+              public_name: "Cloudflare Free Plan",
+              scope: "zone",
+            },
+          },
+          {
+            state: "Paid",
+            rate_plan: {
+              id: "r2_paid",
+              public_name: "R2 Paid",
+              scope: "account",
+            },
+          },
+        ],
+      });
+    },
     runCommand: (command, args) => {
       commands.push([command, ...args].join(" "));
       if (args.includes("list") || args.includes("dns")) {
@@ -69,14 +103,17 @@ test("email status captures Cloudflare Email Sending API failures", async () => 
   });
 
   assert.equal(summary.ready, false);
+  assert.equal(summary.cloudflare_email.account_plan.workers_paid, false);
   assert.equal(summary.cloudflare_email.zones.error, "Unauthorized [code: 2036]");
   assert.equal(summary.cloudflare_email.dns.error, "Unauthorized [code: 2036]");
   assert.equal(
     summary.cloudflare_email.send.error,
     "email.sending.error.internal_server [code: 10002]",
   );
+  assert.match(summary.blockers.join("\n"), /requires Workers Paid plan/);
   assert.match(summary.blockers.join("\n"), /zone listing failed/);
   assert.match(summary.blockers.join("\n"), /test send failed/);
+  assert.match(summary.next_actions.join("\n"), /enable Workers Paid/);
   assert(commands.some((command) => command.includes("email sending send")));
 });
 
