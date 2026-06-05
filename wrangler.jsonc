@@ -1,20 +1,14 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "wavey-id-worker",
+  "name": "wavey-id-auth0-legacy-worker",
   "main": "src/worker.js",
   "compatibility_date": "2026-06-02",
   "compatibility_flags": ["nodejs_compat"],
   "account_id": "c57bb20727aa3564966d2bb693abddce",
-  "workers_dev": false,
+  "workers_dev": true,
   "observability": {
     "enabled": true
   },
-  "routes": [
-    {
-      "pattern": "id.wavey.ai/*",
-      "zone_name": "wavey.ai"
-    }
-  ],
   "vars": {
     "PUBLIC_BASE_URL": "https://id.wavey.ai",
     "AUTH0_DOMAIN": "wavey.eu.auth0.com",

@@ -37,6 +37,8 @@ const selectedPrivateKeyClass = selectedPrivateKeyPath
   ? classifyPrivateKeyPath(selectedPrivateKeyPath)
   : null;
 const selectedPathRefused = selectedPrivateKeyClass === "app_store_connect_admin_refused";
+const inferredAppleKeyId = selectedPrivateKeyPath ? appleKeyIdFromPath(selectedPrivateKeyPath) : "";
+const appleKeyId = env.APPLE_KEY_ID || inferredAppleKeyId;
 
 let privateKeyPathReadable = false;
 let privateKeyPathValid = false;
@@ -56,7 +58,7 @@ if (env.APPLE_PRIVATE_KEY) {
 
 const runtimeSigningReady =
   Boolean(env.APPLE_TEAM_ID) &&
-  Boolean(env.APPLE_KEY_ID) &&
+  Boolean(appleKeyId) &&
   (inlinePrivateKeyValid || privateKeyPathValid) &&
   !selectedPathRefused;
 const staticSecretReady = Boolean(env.APPLE_CLIENT_SECRET);
@@ -87,7 +89,8 @@ const summary = {
   credentials: {
     apple_client_secret_configured: Boolean(env.APPLE_CLIENT_SECRET),
     apple_team_id_configured: Boolean(env.APPLE_TEAM_ID),
-    apple_key_id_configured: Boolean(env.APPLE_KEY_ID),
+    apple_key_id_configured: Boolean(appleKeyId),
+    apple_key_id_inferred_from_path: Boolean(!env.APPLE_KEY_ID && inferredAppleKeyId),
     apple_private_key_env_configured: Boolean(env.APPLE_PRIVATE_KEY),
     apple_private_key_env_valid: env.APPLE_PRIVATE_KEY ? inlinePrivateKeyValid : null,
     apple_private_key_path_configured: Boolean(explicitPrivateKeyPath),
@@ -174,11 +177,7 @@ function configuredValue(value, placeholder) {
 }
 
 function inventoryParentKeys() {
-  const parent = path.resolve(root, "..");
-  const entries = fs.readdirSync(parent, { withFileTypes: true });
-  const p8Files = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".p8"))
-    .map((entry) => path.join(parent, entry.name));
+  const p8Files = localAppleKeyFiles(root);
   return {
     p8FileCount: p8Files.length,
     signInWithAppleCandidates: p8Files.filter((filePath) =>
@@ -190,6 +189,22 @@ function inventoryParentKeys() {
   };
 }
 
+function localAppleKeyFiles(rootDir) {
+  return [path.resolve(rootDir, ".wrangler/zeroth"), path.resolve(rootDir, "..")]
+    .flatMap((dir) => p8FilesInDirectory(dir));
+}
+
+function p8FilesInDirectory(dir) {
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".p8"))
+      .map((entry) => path.join(dir, entry.name));
+  } catch {
+    return [];
+  }
+}
+
 function classifyPrivateKeyPath(filePath) {
   const basename = path.basename(filePath);
   if (/^AppStore_AuthKey_[A-Z0-9]{10}\.p8$/.test(basename)) {
@@ -199,6 +214,11 @@ function classifyPrivateKeyPath(filePath) {
     return "sign_in_with_apple_candidate";
   }
   return "explicit_path_unclassified";
+}
+
+function appleKeyIdFromPath(filePath) {
+  const match = /^AuthKey_([A-Z0-9]{10})\.p8$/.exec(path.basename(filePath));
+  return match ? match[1] : "";
 }
 
 function isReadableFile(filePath) {

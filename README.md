@@ -3,8 +3,8 @@
 Shared Cloudflare Worker for `id.wavey.ai`.
 
 This service is the single Wavey-owned identity front door for Bitneedle,
-Infidelity, and Wavey apps. The target replacement path is the generic Rust
-Zeroth Worker in `../zeroth`; this repo should own deployment configuration,
+Infidelity, and Wavey apps. The active implementation is the generic Rust
+Zeroth Worker in `../zeroth`; this repo owns deployment configuration,
 registered clients, provider credentials, and Wavey-specific Apple association
 data.
 
@@ -13,8 +13,9 @@ configured.
 
 ## Zeroth Deployment
 
-Use `wrangler.zeroth.jsonc` to deploy the generic Zeroth Worker as `id.wavey.ai`
-without copying auth implementation code into this repo.
+The default `npm run dev`, `npm run deploy:dry-run`, and `npm run deploy`
+commands use `wrangler.zeroth.jsonc` and deploy the generic Zeroth Worker as
+`id.wavey.ai` without copying auth implementation code into this repo.
 
 The `zeroth:*` Cloudflare scripts run through `scripts/zeroth-cloudflare.mjs`.
 By default it reads the Wavey/Bitneedle global API key from `../.cloudflare-token`,
@@ -27,8 +28,7 @@ Scripts for account `c57bb20727aa3564966d2bb693abddce`.
 
 ```sh
 npm install
-npm run zeroth:build
-npm run zeroth:deploy:dry-run
+npm run deploy:dry-run
 npm run zeroth:deploy:preflight:local
 npm run zeroth:verify:local
 ```
@@ -80,7 +80,7 @@ Set provider and signing secrets:
 export GOOGLE_CLIENT_SECRET=...
 export APPLE_TEAM_ID=...
 # APPLE_KEY_ID can be inferred from AuthKey_<KEYID>.p8 filenames.
-export APPLE_PRIVATE_KEY_PATH=../AuthKey_YOURKEYID.p8
+export APPLE_PRIVATE_KEY_PATH=.wrangler/zeroth/AuthKey_YOURKEYID.p8
 export SPOTIFY_CLIENT_SECRET=...
 source <(npm run --silent zeroth:signing-key -- --kid wavey-id-2026-06-04)
 # Optional during signing-key rotation:
@@ -100,7 +100,7 @@ the Apple provider material and optional admin session allowlist:
 ```sh
 export APPLE_TEAM_ID=2D332SZF9P
 # APPLE_KEY_ID can be inferred from AuthKey_<KEYID>.p8 filenames.
-export APPLE_PRIVATE_KEY_PATH=../AuthKey_YOURKEYID.p8
+export APPLE_PRIVATE_KEY_PATH=.wrangler/zeroth/AuthKey_9A6Y2BQGRB.p8
 # Optional after the first Zeroth admin user has logged in:
 # export ADMIN_USER_IDS=usr_...
 # export ADMIN_EMAILS=you@wavey.ai
@@ -121,10 +121,12 @@ bootstrap/emergency access.
 rotation when existing relying apps still need retired public ES256 keys in
 Zeroth's JWKS.
 `npm run zeroth:apple:status` reports local Sign in with Apple readiness without
-printing key material, key IDs, client secrets, or admin tokens. The parent
-folder `AppStore_AuthKey_*.p8` file is App Store Connect/admin material, not
-Zeroth provider-login material, and the Zeroth secret helper refuses to use it
-for `APPLE_PRIVATE_KEY_PATH`.
+printing key material, client secrets, or admin tokens. The local Sign in with
+Apple key cache lives under `.wrangler/zeroth/AuthKey_<KEYID>.p8`; that folder
+is ignored by Git and should contain only provider-login key material. The
+parent folder `AppStore_AuthKey_*.p8` file is App Store Connect/admin material,
+not Zeroth provider-login material, and the Zeroth secret helper refuses to use
+it for `APPLE_PRIVATE_KEY_PATH`.
 `npm run zeroth:providers:status` reports local Apple, Google, and Spotify
 readiness without printing provider secrets. Use it before `npm run
 zeroth:secrets` to check that provider client IDs and provider secrets are all
@@ -142,7 +144,7 @@ Provider client IDs are non-secret Wrangler vars in `wrangler.zeroth.jsonc`:
 ```text
 DEFAULT_LOGIN_CLIENT_ID=wavey-browser
 SESSION_COOKIE_DOMAIN=.wavey.ai
-APPLE_CLIENT_ID=<Sign in with Apple service id>
+APPLE_CLIENT_ID=ai.wavey.zeroth
 GOOGLE_CLIENT_ID=<Google OAuth client id>
 SPOTIFY_CLIENT_ID=<Spotify OAuth client id>
 ```
@@ -153,8 +155,8 @@ same HttpOnly browser session cookie. It does not make that cookie available to
 unrelated registrable domains such as `bitneedle.com` or `infidelity.io`; those
 apps still use Zeroth through OIDC redirects and their own app-local sessions.
 
-After replacing the D1 database ID and provider client IDs, run the strict
-deployment config verifier and deployment preflight:
+After replacing the remaining provider client IDs, run the strict deployment
+config verifier and deployment preflight:
 
 ```sh
 npm run zeroth:verify
@@ -192,9 +194,8 @@ npm run zeroth:live:status
 npm run zeroth:verify:live
 ```
 
-`npm run zeroth:live:status` is non-strict rollout visibility. Before cutover it
-should report `backend: "auth0_legacy"`. After the Worker route points at
-Zeroth, it should report `zeroth_not_ready` until provider/signing config is
+`npm run zeroth:live:status` is non-strict rollout visibility. The live host
+should report `zeroth_not_ready` until Google and Spotify provider config is
 complete, then `zeroth_ready`. Use `npm run zeroth:live:require` when a script
 must fail unless discovery is Zeroth-owned.
 
@@ -307,9 +308,10 @@ Zeroth treats unported loopback client redirects such as
 loopback port on the same host/path, matching the current Infidelity Swift OIDC
 client.
 
-`wrangler.jsonc`, `src/worker.js`, and the Auth0 scripts remain here as the
-legacy rollback path until the Zeroth deployment is live and relying apps have
-switched to Zeroth client IDs and redirect URIs.
+`wrangler.jsonc`, `src/worker.js`, and the Auth0 scripts remain only as an
+archived rollback reference. `wrangler.jsonc` now deploys the legacy code as
+`wavey-id-auth0-legacy-worker` on workers.dev and does not own the
+`id.wavey.ai/*` route.
 
 ## Runtime Shape
 
@@ -456,19 +458,22 @@ DNS:
 CNAME id.wavey.ai -> wavey.ai, proxied
 ```
 
-Legacy Auth0 deploy:
+Archived Auth0 deploy:
 
 ```sh
 npm install
-npm run check
-npm run deploy:dry-run
-npm run deploy
+npm run legacy:auth0:check
+npm run legacy:auth0:deploy:dry-run
+npm run legacy:auth0:deploy
 ```
+
+Do not use the archived Auth0 deploy for `id.wavey.ai`; the route belongs to
+the Zeroth deployment in `wrangler.zeroth.jsonc`.
 
 Auth0 callback smoke test:
 
 ```sh
-npm run verify:auth0
+npm run legacy:auth0:verify
 ```
 
 Secrets:
@@ -502,7 +507,10 @@ Example value shape:
 }
 ```
 
-## Auth0 Configuration
+## Legacy Auth0 Configuration
+
+This section is migration history for the archived Auth0 Worker. It is not the
+active `id.wavey.ai` path.
 
 Auth0 tenant:
 
@@ -720,8 +728,10 @@ macOS OIDC issuer:
 https://id.wavey.ai
 ```
 
-macOS login is still disabled in the current app UI; the test-user button can
-remain the active path until Auth0 and Apple settings above are configured.
+macOS login is still disabled in the current app UI. Zeroth is the issuer to
+use when that UI is wired back up; Apple web login is configured on
+`id.wavey.ai`, while Google and Spotify provider config still need real app
+credentials.
 
 ## Notes
 

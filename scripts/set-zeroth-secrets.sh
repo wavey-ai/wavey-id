@@ -139,15 +139,21 @@ reject_app_store_connect_apple_key_path() {
 }
 
 discover_apple_private_key_path() {
-  local search_root="$ROOT/.."
+  local search_roots=("$ROOT/.wrangler/zeroth" "$ROOT/..")
   local matches=()
-  while IFS= read -r path; do
-    matches+=("$path")
-  done < <(
-    find "$search_root" -maxdepth 1 -type f \
-      -name 'AuthKey_*.p8' \
-      -print 2>/dev/null | sort
-  )
+  local search_root
+  for search_root in "${search_roots[@]}"; do
+    if [[ ! -d "$search_root" ]]; then
+      continue
+    fi
+    while IFS= read -r path; do
+      matches+=("$path")
+    done < <(
+      find "$search_root" -maxdepth 1 -type f \
+        -name 'AuthKey_*.p8' \
+        -print 2>/dev/null | sort
+    )
+  done
 
   if [[ "${#matches[@]}" -eq 1 ]]; then
     printf "%s" "${matches[0]}"
