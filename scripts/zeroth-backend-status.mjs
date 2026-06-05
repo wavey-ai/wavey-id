@@ -42,6 +42,9 @@ function runCli(rawArgs) {
     "scripts/zeroth-provider-status.mjs",
     "--remote",
   ]);
+  const loginStatus = runJson("login_status", "node", [
+    "scripts/zeroth-login-status.mjs",
+  ]);
   const swiftStatus = runJson("swift_status", "node", [
     "scripts/zeroth-swift-status.mjs",
   ]);
@@ -52,11 +55,13 @@ function runCli(rawArgs) {
     rollout: rollout.json,
     liveAdmin: liveAdmin.json,
     providerStatus: providerStatus.json,
+    loginStatus: commandJsonOrFailure(loginStatus, "hosted provider login status command failed"),
     swiftStatus: commandJsonOrFailure(swiftStatus, "Swift/iOS status command failed"),
     commandStatus: {
       rollout_status: rollout.status,
       live_admin_bootstrap: liveAdmin.status,
       provider_status_remote: providerStatus.status,
+      login_status: loginStatus.status,
       swift_status: swiftStatus.status,
     },
   });
@@ -74,6 +79,7 @@ export function backendStatusSummary({
   rollout = {},
   liveAdmin = {},
   providerStatus = {},
+  loginStatus,
   swiftStatus,
   commandStatus = {},
 } = {}) {
@@ -106,6 +112,7 @@ export function backendStatusSummary({
   const providerBlockers = providerBlockerSummary(providerStatus);
   const localAuth = localAuthSummary(liveAdminStatus?.local_auth_methods);
   const localAuthBlockers = localAuthBlockerSummary(localAuth);
+  const loginBlockers = loginBlockerSummary(loginStatus);
   const swiftBlockers = swiftBlockerSummary(swiftStatus);
   const providersReady =
     providerStatus?.remote_ready === true && live?.ready === true && live?.ready_status === 200;
@@ -117,6 +124,8 @@ export function backendStatusSummary({
     liveAdminStatus,
     providerStatus,
     localAuthBlockers,
+    loginBlockers,
+    loginStatus,
     swiftBlockers,
     swiftStatus,
   });
@@ -147,16 +156,19 @@ export function backendStatusSummary({
       warnings: providerStatus?.warnings || [],
     },
     local_auth_summary: localAuth,
+    login_summary: loginSummary(loginStatus),
     swift_summary: swiftSummary(swiftStatus),
     auth0_replacement: auth0Replacement,
     backend_blockers: backendBlockers,
     provider_blockers: providerBlockers,
     local_auth_blockers: localAuthBlockers,
+    login_blockers: loginBlockers,
     swift_blockers: swiftBlockers,
     next_actions: nextActions({
       backendBlockers,
       providerBlockers,
       localAuthBlockers,
+      loginBlockers,
       swiftBlockers,
       providersReady,
     }),
@@ -171,6 +183,8 @@ function auth0ReplacementSummary({
   liveAdminStatus = {},
   providerStatus = {},
   localAuthBlockers = [],
+  loginBlockers = [],
+  loginStatus,
   swiftBlockers = [],
   swiftStatus,
 }) {
@@ -220,6 +234,9 @@ function auth0ReplacementSummary({
   for (const blocker of localAuthBlockers) {
     blockers.push(`local auth: ${blocker}`);
   }
+  for (const blocker of loginBlockers) {
+    blockers.push(`hosted login: ${blocker}`);
+  }
   for (const blocker of swiftBlockers) {
     blockers.push(`Swift/iOS: ${blocker}`);
   }
@@ -227,6 +244,7 @@ function auth0ReplacementSummary({
   return {
     ready: blockers.length === 0,
     apple_google_ready: backendReady && providersReady,
+    hosted_login_ready: loginStatus?.ready ?? null,
     swift_ready: swiftStatus?.ready ?? null,
     target_provider_ids: replacementProviderIds,
     target_providers: targetProviders,
@@ -296,6 +314,49 @@ function localAuthBlockerSummary(summary) {
   return items;
 }
 
+function loginSummary(loginStatus) {
+  if (!loginStatus || typeof loginStatus !== "object") {
+    return {
+      checked: false,
+      ready: null,
+      checks: {},
+      providers: [],
+      blockers: [],
+    };
+  }
+  return {
+    checked: true,
+    ready: loginStatus.ready ?? null,
+    checks: loginStatus.checks || {},
+    providers: Array.isArray(loginStatus.providers)
+      ? loginStatus.providers.map((provider) => ({
+          id: provider.id || null,
+          label: provider.label || provider.id || null,
+          disabled: provider.disabled === true,
+          ok: provider.ok === true,
+          status: provider.status ?? null,
+          location_host: provider.location_host || null,
+          redirected_to_provider: provider.redirected_to_provider === true,
+        }))
+      : [],
+    blockers: Array.isArray(loginStatus.blockers) ? loginStatus.blockers : [],
+  };
+}
+
+function loginBlockerSummary(loginStatus) {
+  if (!loginStatus || typeof loginStatus !== "object") {
+    return [];
+  }
+  if (loginStatus.ready === true) {
+    return [];
+  }
+  const blockers = Array.isArray(loginStatus.blockers) ? loginStatus.blockers : [];
+  if (blockers.length > 0) {
+    return blockers;
+  }
+  return ["hosted provider login redirects are not ready"];
+}
+
 function swiftSummary(swiftStatus) {
   if (!swiftStatus || typeof swiftStatus !== "object") {
     return {
@@ -334,6 +395,7 @@ function nextActions({
   backendBlockers,
   providerBlockers,
   localAuthBlockers,
+  loginBlockers,
   swiftBlockers,
   providersReady,
 }) {
@@ -351,6 +413,12 @@ function nextActions({
   }
   if (providerBlockers.length > 0) {
     return providerBlockers;
+  }
+  if (loginBlockers.length > 0) {
+    return [
+      "run npm run zeroth:login:status to inspect hosted provider login redirects",
+      "fix hosted login blockers, then re-run npm run zeroth:backend:status",
+    ];
   }
   if (localAuthBlockers.length > 0) {
     return [

@@ -185,6 +185,56 @@ test("backend status reports Swift readiness blockers in replacement gate", () =
   assert.match(summary.next_actions.join("\n"), /zeroth:swift:status/);
 });
 
+test("backend status reports hosted login blockers in replacement gate", () => {
+  const summary = backendStatusSummary({
+    requireBackend: true,
+    rollout: rolloutStatus({
+      live_backend: "zeroth_ready",
+      zeroth_live: true,
+    }),
+    liveAdmin: liveAdmin({
+      ready_status: 200,
+      ready: true,
+    }),
+    providerStatus: readyProviderStatus(),
+    loginStatus: {
+      ready: false,
+      checks: {
+        active_provider_redirects: false,
+        disabled_provider_rejections: true,
+        hosted_picker: true,
+      },
+      providers: [
+        {
+          id: "apple",
+          label: "Apple",
+          disabled: false,
+          ok: false,
+          status: 200,
+          location_host: null,
+          redirected_to_provider: false,
+        },
+      ],
+      blockers: ["Apple: returned HTTP 200, expected upstream redirect"],
+    },
+  });
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.backend_ready, true);
+  assert.equal(summary.providers_ready, true);
+  assert.equal(summary.login_summary.ready, false);
+  assert.deepEqual(summary.login_blockers, [
+    "Apple: returned HTTP 200, expected upstream redirect",
+  ]);
+  assert.equal(summary.auth0_replacement.ready, false);
+  assert.equal(summary.auth0_replacement.hosted_login_ready, false);
+  assert.match(
+    summary.auth0_replacement.blockers.join("\n"),
+    /hosted login: Apple: returned HTTP 200, expected upstream redirect/,
+  );
+  assert.match(summary.next_actions.join("\n"), /zeroth:login:status/);
+});
+
 function rolloutStatus(overrides = {}) {
   return {
     status: {

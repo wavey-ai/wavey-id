@@ -233,8 +233,18 @@ npm run zeroth:backend:require
 ```
 
 This command requires live discovery, signing config, D1 schema, seeded clients,
-Workers API access, Worker secret-list access, active provider readiness, and
-the 10 ms startup guardrail.
+Workers API access, Worker secret-list access, active provider readiness,
+hosted Apple/Google login redirects, and the 10 ms startup guardrail.
+
+To inspect only the hosted login path, run:
+
+```sh
+npm run zeroth:login:status
+```
+
+It verifies that active providers set a transaction cookie and redirect to the
+expected upstream authorization host, and that deployment-disabled providers are
+not shown in the hosted picker.
 
 The output separates live issuer readiness from full Auth0 retirement. A
 `phase` of `zeroth_ready` means `id.wavey.ai` is serving the Zeroth issuer and
