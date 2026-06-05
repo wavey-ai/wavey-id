@@ -18,6 +18,14 @@ test("route status verifies common Zeroth and compatibility routes", async () =>
     summary.probes.find((probe) => probe.path === "/callback/apple").error,
     "invalid_request",
   );
+  assert.equal(
+    summary.probes.find((probe) => probe.path === "/auth/callback/apple").error,
+    "invalid_request",
+  );
+  assert.equal(
+    summary.probes.find((probe) => probe.path === "/magic-link/request").error,
+    "invalid_request",
+  );
 });
 
 test("route status reports manifest and live not_found regressions", async () => {
@@ -60,8 +68,21 @@ async function fakeRouteFetch(input, options = {}) {
     return redirectResponse("https://id.example.com/login");
   }
   if (
-    ["/callback", "/callback/apple", "/callback/google"].includes(url.pathname) ||
-    (["/auth/magic-link/send", "/api/auth/magic-link/send"].includes(url.pathname) && method === "POST")
+    [
+      "/callback",
+      "/callback/apple",
+      "/callback/google",
+      "/auth/callback",
+      "/auth/callback/apple",
+      "/api/auth/callback/google",
+    ].includes(url.pathname) ||
+    ([
+      "/auth/magic-link/send",
+      "/magic-link/request",
+      "/auth/magic-link/request",
+      "/api/auth/magic-link/send",
+      "/api/auth/magic-link/request",
+    ].includes(url.pathname) && method === "POST")
   ) {
     return Response.json(
       {
@@ -93,12 +114,22 @@ function routeManifest() {
     ["/callback", "POST"],
     ["/callback/{provider}", "GET"],
     ["/callback/{provider}", "POST"],
+    ["/auth/callback", "GET"],
+    ["/auth/callback", "POST"],
+    ["/auth/callback/{provider}", "GET"],
+    ["/auth/callback/{provider}", "POST"],
     ["/auth/magic-link/send", "GET"],
     ["/auth/magic-link/send", "POST"],
     ["/auth/magic-link/send", "OPTIONS"],
+    ["/magic-link/request", "POST"],
+    ["/magic-link/request", "OPTIONS"],
+    ["/auth/magic-link/request", "POST"],
+    ["/auth/magic-link/request", "OPTIONS"],
     ["/api/auth/magic-link/send", "GET"],
     ["/api/auth/magic-link/send", "POST"],
     ["/api/auth/magic-link/send", "OPTIONS"],
+    ["/api/auth/magic-link/request", "POST"],
+    ["/api/auth/magic-link/request", "OPTIONS"],
   ].map(([path, method]) => ({ method, path }));
 }
 
