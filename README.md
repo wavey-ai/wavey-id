@@ -554,20 +554,20 @@ callback is present on the Auth0 application.
 The repeatable check for this is:
 
 ```sh
-npm run verify:auth0
+npm run legacy:auth0:verify
 ```
 
 If an Auth0 Management API token is available, patch the current client in one
 step:
 
 ```sh
-AUTH0_MANAGEMENT_TOKEN=... npm run patch:auth0
+AUTH0_MANAGEMENT_TOKEN=... npm run legacy:auth0:patch
 ```
 
 Or use an Auth0 machine-to-machine app with `update:clients` access:
 
 ```sh
-AUTH0_MGMT_CLIENT_ID=... AUTH0_MGMT_CLIENT_SECRET=... npm run patch:auth0
+AUTH0_MGMT_CLIENT_ID=... AUTH0_MGMT_CLIENT_SECRET=... npm run legacy:auth0:patch
 ```
 
 Allowed Logout URLs:

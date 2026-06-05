@@ -17,8 +17,6 @@
     "legacy:auth0:types": "wrangler types --config wrangler.jsonc src/worker-configuration.d.ts",
     "legacy:auth0:patch": "node scripts/patch-auth0-client.mjs",
     "legacy:auth0:verify": "node scripts/verify-auth0-config.mjs",
-    "patch:auth0": "npm run legacy:auth0:patch",
-    "verify:auth0": "npm run legacy:auth0:verify",
     "zeroth:check": "node --check scripts/zeroth-cloudflare.mjs && node --check scripts/verify-zeroth-config.mjs && node --check scripts/verify-zeroth-config.test.mjs && node --check scripts/zeroth-apple-status.mjs && node --check scripts/zeroth-apple-provision.mjs && node --check scripts/zeroth-provider-status.mjs && node --check scripts/zeroth-provider-status.test.mjs && node --check scripts/zeroth-deploy-preflight.mjs && node --check scripts/zeroth-live-status.mjs && node --check scripts/zeroth-rollout-status.mjs && node --check scripts/zeroth-backend-status.mjs && node --check scripts/zeroth-backend-status.test.mjs && node --check scripts/zeroth-startup-profile.mjs && node --check scripts/zeroth-startup-profile.test.mjs && node --check scripts/zeroth-swift-status.mjs && node --check scripts/zeroth-swift-status.test.mjs && node --test scripts/zeroth-startup-profile.test.mjs scripts/verify-zeroth-config.test.mjs scripts/zeroth-provider-status.test.mjs scripts/zeroth-backend-status.test.mjs scripts/zeroth-swift-status.test.mjs",
     "zeroth:build": "cd ../zeroth/crates/zeroth-worker && worker-build --release",
     "zeroth:dev": "node scripts/zeroth-cloudflare.mjs npx wrangler@4.98.0 dev --config wrangler.zeroth.jsonc",
