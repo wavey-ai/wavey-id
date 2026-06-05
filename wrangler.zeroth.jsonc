@@ -22,7 +22,7 @@
     "TX_COOKIE_NAME": "wavey_id_tx",
     "DEFAULT_LOGIN_CLIENT_ID": "wavey-browser",
     "APPLE_NATIVE_CLIENT_IDS": "ai.wavey.id",
-    "APPLE_CLIENT_ID": "replace-with-sign-in-with-apple-service-id",
+    "APPLE_CLIENT_ID": "ai.wavey.zeroth",
     "GOOGLE_CLIENT_ID": "replace-with-google-oauth-client-id",
     "SPOTIFY_CLIENT_ID": "replace-with-spotify-oauth-client-id"
   },
