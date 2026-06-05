@@ -262,6 +262,18 @@ It verifies that active providers set a transaction cookie and redirect to the
 expected upstream authorization host, and that deployment-disabled providers are
 not shown in the hosted picker.
 
+To prove the Spotify external account gate after fixing the app owner Premium
+and Users Management allowlist state, run:
+
+```sh
+SPOTIFY_ACCESS_TOKEN=... npm run zeroth:spotify:status
+SPOTIFY_ACCESS_TOKEN=... npm run zeroth:spotify:require
+```
+
+The probe calls Spotify's current-user profile endpoint `/v1/me`, checks that
+the profile returns HTTP 200 with `account_id` or legacy `id` for Zeroth account
+linking, and does not print the access token or profile identifiers.
+
 The output separates live issuer readiness from full Auth0 retirement. A
 `phase` of `zeroth_ready` means `id.wavey.ai` is serving the Zeroth issuer and
 active providers are usable. The `auth0_replacement` block is stricter: it

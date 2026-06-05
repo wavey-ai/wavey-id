@@ -183,6 +183,7 @@ export function backendStatusSummary({
       persistenceBlockers,
       swiftBlockers,
       providersReady,
+      auth0Replacement,
     }),
     command_status: commandStatus,
   };
@@ -503,7 +504,9 @@ function nextActions({
   persistenceBlockers,
   swiftBlockers,
   providersReady,
+  auth0Replacement,
 }) {
+  const spotifyActions = spotifyNextActions(auth0Replacement);
   if (backendBlockers.length > 0) {
     return [
       "fix backend blockers, then re-run npm run zeroth:backend:status",
@@ -533,6 +536,7 @@ function nextActions({
   }
   if (localAuthBlockers.length > 0) {
     return [
+      ...spotifyActions,
       "run npm run zeroth:email:status to inspect Cloudflare Email Sending and live magic-link evidence",
       "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link",
       "run npm run zeroth:email:send-test to attempt a minimal Cloudflare email send",
@@ -545,7 +549,23 @@ function nextActions({
       "fix Swift/iOS blockers, then re-run npm run zeroth:backend:status",
     ];
   }
+  if (spotifyActions.length > 0) {
+    return spotifyActions;
+  }
   return [];
+}
+
+function spotifyNextActions(auth0Replacement = {}) {
+  const spotify = Array.isArray(auth0Replacement.target_providers)
+    ? auth0Replacement.target_providers.find((provider) => provider.id === "spotify")
+    : null;
+  if (!spotify?.disabled) {
+    return [];
+  }
+  return [
+    "after fixing Spotify owner Premium and user allowlist state, run SPOTIFY_ACCESS_TOKEN=... npm run zeroth:spotify:status",
+    "when Spotify /v1/me is ready, remove spotify from DISABLED_PROVIDERS and redeploy Zeroth",
+  ];
 }
 
 function requiredProviderLabels(providerStatus = {}) {

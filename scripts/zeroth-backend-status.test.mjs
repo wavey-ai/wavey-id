@@ -151,6 +151,8 @@ test("backend status reports magic link delivery blockers without failing backen
   );
   assert.match(summary.next_actions.join("\n"), /zeroth:email:status/);
   assert.match(summary.next_actions.join("\n"), /zeroth:email:send-test/);
+  assert.match(summary.next_actions.join("\n"), /zeroth:spotify:status/);
+  assert.match(summary.next_actions.join("\n"), /DISABLED_PROVIDERS/);
 });
 
 test("backend status reports Swift readiness blockers in replacement gate", () => {
