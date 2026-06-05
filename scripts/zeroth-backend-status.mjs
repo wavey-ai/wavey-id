@@ -296,7 +296,9 @@ function nextActions({ backendBlockers, providerBlockers, localAuthBlockers, pro
   }
   if (localAuthBlockers.length > 0) {
     return [
+      "run npm run zeroth:email:status to inspect Cloudflare Email Sending and live magic-link evidence",
       "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link",
+      "run npm run zeroth:email:send-test to attempt a minimal Cloudflare email send",
       "re-run npm run zeroth:backend:status and check local_auth_summary.magic_link.delivery_status",
     ];
   }

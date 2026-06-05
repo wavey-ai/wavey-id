@@ -139,6 +139,8 @@ test("backend status reports magic link delivery blockers without failing backen
     summary.auth0_replacement.blockers.join("\n"),
     /local auth: magic link email delivery failed recently: email_internal_server_error/,
   );
+  assert.match(summary.next_actions.join("\n"), /zeroth:email:status/);
+  assert.match(summary.next_actions.join("\n"), /zeroth:email:send-test/);
 });
 
 function rolloutStatus(overrides = {}) {
