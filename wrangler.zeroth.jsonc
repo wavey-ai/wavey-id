@@ -36,6 +36,14 @@
       "database_id": "a9c41029-3255-47e9-aa62-7091afb787b9"
     }
   ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": [
+        "login@wavey.ai"
+      ]
+    }
+  ],
   "build": {
     "command": "cd ../zeroth/crates/zeroth-worker && worker-build --release"
   }
