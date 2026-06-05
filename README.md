@@ -243,8 +243,9 @@ npm run zeroth:backend:require
 
 This command requires live discovery, signing config, D1 schema, seeded clients,
 Workers API access, Worker secret-list access, active provider readiness,
-hosted Apple/Google login redirects, D1-backed user/event/local-auth
-persistence evidence, and the 10 ms startup guardrail.
+hosted Apple/Google login redirects, public route-alias compatibility,
+D1-backed user/event/local-auth persistence evidence, and the 10 ms startup
+guardrail.
 
 To inspect only the D1-backed persistence surface, run:
 
@@ -265,6 +266,16 @@ npm run zeroth:login:status
 It verifies that active providers set a transaction cookie and redirect to the
 expected upstream authorization host, and that deployment-disabled providers are
 not shown in the hosted picker.
+
+To inspect only public Zeroth route compatibility, run:
+
+```sh
+npm run zeroth:routes:status
+```
+
+It verifies `/routes` advertises the common hosted-login, admin, callback, and
+magic-link aliases, then probes those live paths so router-level `not_found`
+regressions block the strict replacement gate.
 
 To prove the Spotify external account gate after fixing the app owner Premium
 and Users Management allowlist state, run:

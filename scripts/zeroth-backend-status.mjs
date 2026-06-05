@@ -45,6 +45,9 @@ function runCli(rawArgs) {
   const loginStatus = runJson("login_status", "node", [
     "scripts/zeroth-login-status.mjs",
   ]);
+  const routeStatus = runJson("route_status", "node", [
+    "scripts/zeroth-route-status.mjs",
+  ]);
   const persistenceStatus = runJson("persistence_status", "node", [
     "scripts/zeroth-persistence-status.mjs",
   ]);
@@ -66,6 +69,7 @@ function runCli(rawArgs) {
     liveAdmin: liveAdmin.json,
     providerStatus: providerStatus.json,
     loginStatus: commandJsonOrFailure(loginStatus, "hosted provider login status command failed"),
+    routeStatus: commandJsonOrFailure(routeStatus, "Zeroth route status command failed"),
     persistenceStatus: commandJsonOrFailure(persistenceStatus, "D1 persistence status command failed"),
     emailStatus: commandJsonOrFailure(emailStatus, "magic-link email delivery status command failed"),
     swiftStatus: commandJsonOrFailure(swiftStatus, "Swift/iOS status command failed"),
@@ -74,6 +78,7 @@ function runCli(rawArgs) {
       live_admin_bootstrap: liveAdmin.status,
       provider_status_remote: providerStatus.status,
       login_status: loginStatus.status,
+      route_status: routeStatus.status,
       persistence_status: persistenceStatus.status,
       email_status: emailStatus.status,
       swift_status: swiftStatus.status,
@@ -94,6 +99,7 @@ export function backendStatusSummary({
   liveAdmin = {},
   providerStatus = {},
   loginStatus,
+  routeStatus,
   persistenceStatus,
   emailStatus,
   swiftStatus,
@@ -116,6 +122,9 @@ export function backendStatusSummary({
     worker_api_read: rolloutStatus.worker_api_read === true,
     worker_secrets_read: rolloutStatus.worker_secrets_read === true,
   };
+  if (routeStatus && typeof routeStatus === "object") {
+    backendChecks.route_aliases_live = routeStatus.ready === true;
+  }
 
   if (withStartupCheck) {
     backendChecks.worker_startup_profile = rolloutStatus.worker_startup_profile === true;
@@ -129,6 +138,7 @@ export function backendStatusSummary({
   const localAuth = localAuthSummary(liveAdminStatus?.local_auth_methods);
   const localAuthBlockers = localAuthBlockerSummary(localAuth);
   const loginBlockers = loginBlockerSummary(loginStatus);
+  const routeBlockers = routeBlockerSummary(routeStatus);
   const persistenceBlockers = persistenceBlockerSummary(persistenceStatus);
   const emailBlockers = emailBlockerSummary(emailStatus);
   const swiftBlockers = swiftBlockerSummary(swiftStatus);
@@ -144,6 +154,8 @@ export function backendStatusSummary({
     localAuthBlockers,
     loginBlockers,
     loginStatus,
+    routeBlockers,
+    routeStatus,
     persistenceBlockers,
     persistenceStatus,
     emailBlockers,
@@ -179,6 +191,7 @@ export function backendStatusSummary({
     },
     local_auth_summary: localAuth,
     login_summary: loginSummary(loginStatus),
+    route_summary: routeSummary(routeStatus),
     persistence_summary: persistenceSummary(persistenceStatus),
     email_summary: emailSummary(emailStatus),
     swift_summary: swiftSummary(swiftStatus),
@@ -187,6 +200,7 @@ export function backendStatusSummary({
     provider_blockers: providerBlockers,
     local_auth_blockers: localAuthBlockers,
     login_blockers: loginBlockers,
+    route_blockers: routeBlockers,
     persistence_blockers: persistenceBlockers,
     email_blockers: emailBlockers,
     swift_blockers: swiftBlockers,
@@ -195,6 +209,7 @@ export function backendStatusSummary({
       providerBlockers,
       localAuthBlockers,
       loginBlockers,
+      routeBlockers,
       persistenceBlockers,
       emailBlockers,
       emailStatus,
@@ -215,6 +230,8 @@ function auth0ReplacementSummary({
   localAuthBlockers = [],
   loginBlockers = [],
   loginStatus,
+  routeBlockers = [],
+  routeStatus,
   persistenceBlockers = [],
   persistenceStatus,
   emailBlockers = [],
@@ -274,6 +291,9 @@ function auth0ReplacementSummary({
   for (const blocker of loginBlockers) {
     blockers.push(`hosted login: ${blocker}`);
   }
+  for (const blocker of routeBlockers) {
+    blockers.push(`routes: ${blocker}`);
+  }
   for (const blocker of persistenceBlockers) {
     blockers.push(`D1 persistence: ${blocker}`);
   }
@@ -289,6 +309,7 @@ function auth0ReplacementSummary({
     ready: blockers.length === 0,
     apple_google_ready: backendReady && providersReady,
     hosted_login_ready: loginStatus?.ready ?? null,
+    routes_ready: routeStatus?.ready ?? null,
     persistence_ready: persistenceStatus?.ready ?? null,
     email_delivery_ready: emailStatus?.ready ?? null,
     swift_ready: swiftStatus?.ready ?? null,
@@ -445,6 +466,56 @@ function loginBlockerSummary(loginStatus) {
     return blockers;
   }
   return ["hosted provider login redirects are not ready"];
+}
+
+function routeSummary(routeStatus) {
+  if (!routeStatus || typeof routeStatus !== "object") {
+    return {
+      checked: false,
+      ready: null,
+      checks: {},
+      blockers: [],
+    };
+  }
+  return {
+    checked: true,
+    ready: routeStatus.ready ?? null,
+    checks: routeStatus.checks || {},
+    manifest: routeStatus.manifest
+      ? {
+          ok: routeStatus.manifest.ok === true,
+          status: routeStatus.manifest.status ?? null,
+          route_count: routeStatus.manifest.route_count ?? null,
+          required_count: routeStatus.manifest.required_count ?? null,
+          missing: Array.isArray(routeStatus.manifest.missing) ? routeStatus.manifest.missing : [],
+        }
+      : null,
+    probes: Array.isArray(routeStatus.probes)
+      ? routeStatus.probes.map((probe) => ({
+          method: probe.method || null,
+          path: probe.path || null,
+          ok: probe.ok === true,
+          status: probe.status ?? null,
+          error: probe.error || null,
+          not_found: probe.not_found === true,
+        }))
+      : [],
+    blockers: Array.isArray(routeStatus.blockers) ? routeStatus.blockers : [],
+  };
+}
+
+function routeBlockerSummary(routeStatus) {
+  if (!routeStatus || typeof routeStatus !== "object") {
+    return [];
+  }
+  if (routeStatus.ready === true) {
+    return [];
+  }
+  const blockers = Array.isArray(routeStatus.blockers) ? routeStatus.blockers : [];
+  if (blockers.length > 0) {
+    return blockers;
+  }
+  return ["Zeroth route aliases are not ready"];
 }
 
 function persistenceSummary(persistenceStatus) {
@@ -622,6 +693,7 @@ function nextActions({
   providerBlockers,
   localAuthBlockers,
   loginBlockers,
+  routeBlockers,
   persistenceBlockers,
   emailBlockers,
   emailStatus,
@@ -630,6 +702,16 @@ function nextActions({
   auth0Replacement,
 }) {
   const spotifyActions = spotifyNextActions(auth0Replacement);
+  if (
+    routeBlockers.length > 0 &&
+    backendBlockers.length > 0 &&
+    backendBlockers.every((blocker) => blocker === "route_aliases_live")
+  ) {
+    return [
+      "run npm run zeroth:routes:status to inspect public route aliases and not_found regressions",
+      "fix route blockers, then re-run npm run zeroth:backend:status",
+    ];
+  }
   if (backendBlockers.length > 0) {
     return [
       "fix backend blockers, then re-run npm run zeroth:backend:status",
@@ -649,6 +731,12 @@ function nextActions({
     return [
       "run npm run zeroth:login:status to inspect hosted provider login redirects",
       "fix hosted login blockers, then re-run npm run zeroth:backend:status",
+    ];
+  }
+  if (routeBlockers.length > 0) {
+    return [
+      "run npm run zeroth:routes:status to inspect public route aliases and not_found regressions",
+      "fix route blockers, then re-run npm run zeroth:backend:status",
     ];
   }
   if (persistenceBlockers.length > 0) {

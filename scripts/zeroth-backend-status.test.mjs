@@ -403,6 +403,46 @@ test("backend status reports hosted login blockers in replacement gate", () => {
   assert.match(summary.next_actions.join("\n"), /zeroth:login:status/);
 });
 
+test("backend status reports route alias blockers in replacement gate", () => {
+  const summary = backendStatusSummary({
+    rollout: rolloutStatus({
+      live_backend: "zeroth_ready",
+      zeroth_live: true,
+    }),
+    liveAdmin: liveAdmin({
+      ready_status: 200,
+      ready: true,
+    }),
+    providerStatus: readyProviderStatus(),
+    loginStatus: {
+      ready: true,
+      blockers: [],
+    },
+    routeStatus: {
+      ready: false,
+      checks: {
+        manifest: false,
+        live_routes: false,
+        no_not_found: false,
+      },
+      blockers: [
+        "/routes is missing GET /dashboard",
+        "GET /dashboard: returned router not_found",
+      ],
+    },
+  });
+
+  assert.equal(summary.backend_ready, false);
+  assert.equal(summary.route_summary.ready, false);
+  assert.deepEqual(summary.backend_blockers, ["route_aliases_live"]);
+  assert.deepEqual(summary.route_blockers, [
+    "/routes is missing GET /dashboard",
+    "GET /dashboard: returned router not_found",
+  ]);
+  assert.match(summary.auth0_replacement.blockers.join("\n"), /routes: GET \/dashboard/);
+  assert.match(summary.next_actions.join("\n"), /zeroth:routes:status/);
+});
+
 test("backend status reports D1 persistence blockers in replacement gate", () => {
   const summary = backendStatusSummary({
     requireBackend: true,
