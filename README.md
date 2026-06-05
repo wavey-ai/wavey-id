@@ -234,7 +234,18 @@ npm run zeroth:backend:require
 
 This command requires live discovery, signing config, D1 schema, seeded clients,
 Workers API access, Worker secret-list access, active provider readiness,
-hosted Apple/Google login redirects, and the 10 ms startup guardrail.
+hosted Apple/Google login redirects, D1-backed user/event/local-auth
+persistence evidence, and the 10 ms startup guardrail.
+
+To inspect only the D1-backed persistence surface, run:
+
+```sh
+npm run zeroth:persistence:status
+```
+
+It verifies the required Zeroth D1 tables and migrations, seeded clients,
+persisted users, at least one admin user, audit events, local-auth credential
+storage, and provider/admin status APIs without printing bearer tokens.
 
 To inspect only the hosted login path, run:
 
@@ -250,10 +261,10 @@ The output separates live issuer readiness from full Auth0 retirement. A
 `phase` of `zeroth_ready` means `id.wavey.ai` is serving the Zeroth issuer and
 active providers are usable. The `auth0_replacement` block is stricter: it
 requires Apple, Google, and Spotify target provider coverage, the seeded relying
-clients, the Zeroth-owned route, and local-auth delivery evidence. Today that
-block can remain `ready:false` while Apple/Google login is usable, for example
-while Spotify is disabled by deployment or Cloudflare Email Sending has not
-proven magic-link delivery.
+clients, the Zeroth-owned route, D1-backed user/admin/audit persistence, and
+local-auth delivery evidence. Today that block can remain `ready:false` while
+Apple/Google login is usable, for example while Spotify is disabled by
+deployment or Cloudflare Email Sending has not proven magic-link delivery.
 
 `DEFAULT_LOGIN_CLIENT_ID` is used by legacy browser SSO entry points such as
 `/login?return_to=...` when the relying app does not send an explicit

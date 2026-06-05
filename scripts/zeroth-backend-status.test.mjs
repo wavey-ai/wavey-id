@@ -235,6 +235,63 @@ test("backend status reports hosted login blockers in replacement gate", () => {
   assert.match(summary.next_actions.join("\n"), /zeroth:login:status/);
 });
 
+test("backend status reports D1 persistence blockers in replacement gate", () => {
+  const summary = backendStatusSummary({
+    requireBackend: true,
+    rollout: rolloutStatus({
+      live_backend: "zeroth_ready",
+      zeroth_live: true,
+    }),
+    liveAdmin: liveAdmin({
+      ready_status: 200,
+      ready: true,
+    }),
+    providerStatus: readyProviderStatus(),
+    loginStatus: {
+      ready: true,
+      checks: {
+        active_provider_redirects: true,
+        disabled_provider_rejections: true,
+        hosted_picker: true,
+      },
+      blockers: [],
+    },
+    persistenceStatus: {
+      ready: false,
+      checks: {
+        users_api: true,
+        persisted_users: false,
+        events_api: true,
+        audit_events: false,
+      },
+      counts: {
+        user_count: 0,
+        event_count: 0,
+      },
+      blockers: [
+        "no persisted users returned from /users",
+        "no persisted audit events returned from /events",
+      ],
+    },
+  });
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.backend_ready, true);
+  assert.equal(summary.providers_ready, true);
+  assert.equal(summary.persistence_summary.ready, false);
+  assert.deepEqual(summary.persistence_blockers, [
+    "no persisted users returned from /users",
+    "no persisted audit events returned from /events",
+  ]);
+  assert.equal(summary.auth0_replacement.ready, false);
+  assert.equal(summary.auth0_replacement.persistence_ready, false);
+  assert.match(
+    summary.auth0_replacement.blockers.join("\n"),
+    /D1 persistence: no persisted users returned from \/users/,
+  );
+  assert.match(summary.next_actions.join("\n"), /zeroth:persistence:status/);
+});
+
 function rolloutStatus(overrides = {}) {
   return {
     status: {

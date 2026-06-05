@@ -45,6 +45,9 @@ function runCli(rawArgs) {
   const loginStatus = runJson("login_status", "node", [
     "scripts/zeroth-login-status.mjs",
   ]);
+  const persistenceStatus = runJson("persistence_status", "node", [
+    "scripts/zeroth-persistence-status.mjs",
+  ]);
   const swiftStatus = runJson("swift_status", "node", [
     "scripts/zeroth-swift-status.mjs",
   ]);
@@ -56,12 +59,14 @@ function runCli(rawArgs) {
     liveAdmin: liveAdmin.json,
     providerStatus: providerStatus.json,
     loginStatus: commandJsonOrFailure(loginStatus, "hosted provider login status command failed"),
+    persistenceStatus: commandJsonOrFailure(persistenceStatus, "D1 persistence status command failed"),
     swiftStatus: commandJsonOrFailure(swiftStatus, "Swift/iOS status command failed"),
     commandStatus: {
       rollout_status: rollout.status,
       live_admin_bootstrap: liveAdmin.status,
       provider_status_remote: providerStatus.status,
       login_status: loginStatus.status,
+      persistence_status: persistenceStatus.status,
       swift_status: swiftStatus.status,
     },
   });
@@ -80,6 +85,7 @@ export function backendStatusSummary({
   liveAdmin = {},
   providerStatus = {},
   loginStatus,
+  persistenceStatus,
   swiftStatus,
   commandStatus = {},
 } = {}) {
@@ -113,6 +119,7 @@ export function backendStatusSummary({
   const localAuth = localAuthSummary(liveAdminStatus?.local_auth_methods);
   const localAuthBlockers = localAuthBlockerSummary(localAuth);
   const loginBlockers = loginBlockerSummary(loginStatus);
+  const persistenceBlockers = persistenceBlockerSummary(persistenceStatus);
   const swiftBlockers = swiftBlockerSummary(swiftStatus);
   const providersReady =
     providerStatus?.remote_ready === true && live?.ready === true && live?.ready_status === 200;
@@ -126,6 +133,8 @@ export function backendStatusSummary({
     localAuthBlockers,
     loginBlockers,
     loginStatus,
+    persistenceBlockers,
+    persistenceStatus,
     swiftBlockers,
     swiftStatus,
   });
@@ -157,18 +166,21 @@ export function backendStatusSummary({
     },
     local_auth_summary: localAuth,
     login_summary: loginSummary(loginStatus),
+    persistence_summary: persistenceSummary(persistenceStatus),
     swift_summary: swiftSummary(swiftStatus),
     auth0_replacement: auth0Replacement,
     backend_blockers: backendBlockers,
     provider_blockers: providerBlockers,
     local_auth_blockers: localAuthBlockers,
     login_blockers: loginBlockers,
+    persistence_blockers: persistenceBlockers,
     swift_blockers: swiftBlockers,
     next_actions: nextActions({
       backendBlockers,
       providerBlockers,
       localAuthBlockers,
       loginBlockers,
+      persistenceBlockers,
       swiftBlockers,
       providersReady,
     }),
@@ -185,6 +197,8 @@ function auth0ReplacementSummary({
   localAuthBlockers = [],
   loginBlockers = [],
   loginStatus,
+  persistenceBlockers = [],
+  persistenceStatus,
   swiftBlockers = [],
   swiftStatus,
 }) {
@@ -237,6 +251,9 @@ function auth0ReplacementSummary({
   for (const blocker of loginBlockers) {
     blockers.push(`hosted login: ${blocker}`);
   }
+  for (const blocker of persistenceBlockers) {
+    blockers.push(`D1 persistence: ${blocker}`);
+  }
   for (const blocker of swiftBlockers) {
     blockers.push(`Swift/iOS: ${blocker}`);
   }
@@ -245,6 +262,7 @@ function auth0ReplacementSummary({
     ready: blockers.length === 0,
     apple_google_ready: backendReady && providersReady,
     hosted_login_ready: loginStatus?.ready ?? null,
+    persistence_ready: persistenceStatus?.ready ?? null,
     swift_ready: swiftStatus?.ready ?? null,
     target_provider_ids: replacementProviderIds,
     target_providers: targetProviders,
@@ -357,6 +375,45 @@ function loginBlockerSummary(loginStatus) {
   return ["hosted provider login redirects are not ready"];
 }
 
+function persistenceSummary(persistenceStatus) {
+  if (!persistenceStatus || typeof persistenceStatus !== "object") {
+    return {
+      checked: false,
+      ready: null,
+      checks: {},
+      counts: {},
+      blockers: [],
+    };
+  }
+  return {
+    checked: true,
+    ready: persistenceStatus.ready ?? null,
+    checks: persistenceStatus.checks || {},
+    counts: persistenceStatus.counts || {},
+    client_ids: Array.isArray(persistenceStatus.client_ids) ? persistenceStatus.client_ids : [],
+    local_auth_method_ids: Array.isArray(persistenceStatus.local_auth_method_ids)
+      ? persistenceStatus.local_auth_method_ids
+      : [],
+    provider_ids: Array.isArray(persistenceStatus.provider_ids) ? persistenceStatus.provider_ids : [],
+    event_types: Array.isArray(persistenceStatus.event_types) ? persistenceStatus.event_types : [],
+    blockers: Array.isArray(persistenceStatus.blockers) ? persistenceStatus.blockers : [],
+  };
+}
+
+function persistenceBlockerSummary(persistenceStatus) {
+  if (!persistenceStatus || typeof persistenceStatus !== "object") {
+    return [];
+  }
+  if (persistenceStatus.ready === true) {
+    return [];
+  }
+  const blockers = Array.isArray(persistenceStatus.blockers) ? persistenceStatus.blockers : [];
+  if (blockers.length > 0) {
+    return blockers;
+  }
+  return ["D1-backed user/event persistence is not ready"];
+}
+
 function swiftSummary(swiftStatus) {
   if (!swiftStatus || typeof swiftStatus !== "object") {
     return {
@@ -396,6 +453,7 @@ function nextActions({
   providerBlockers,
   localAuthBlockers,
   loginBlockers,
+  persistenceBlockers,
   swiftBlockers,
   providersReady,
 }) {
@@ -418,6 +476,12 @@ function nextActions({
     return [
       "run npm run zeroth:login:status to inspect hosted provider login redirects",
       "fix hosted login blockers, then re-run npm run zeroth:backend:status",
+    ];
+  }
+  if (persistenceBlockers.length > 0) {
+    return [
+      "run npm run zeroth:persistence:status to inspect D1-backed user, event, and local-auth APIs",
+      "repair D1 schema/admin access or complete a real login, then re-run npm run zeroth:backend:status",
     ];
   }
   if (localAuthBlockers.length > 0) {
