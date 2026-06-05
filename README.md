@@ -281,12 +281,17 @@ npm run zeroth:email:status
 npm run zeroth:email:send-test
 ```
 
+Wavey currently uses Zeroth's default `MAGIC_LINK_DELIVERY=cloudflare_email`.
 Cloudflare Email Service requires an active Workers Paid account plan. The email
-status script checks the account subscriptions, the `send_email` binding, sender
-restrictions, Email Sending DNS/status APIs, and live Zeroth magic-link delivery
-evidence without printing Cloudflare credentials or admin tokens.
+status script is transport-aware: for `cloudflare_email` it checks the account
+subscriptions, the `send_email` binding, sender restrictions, Email Sending
+DNS/status APIs, and live Zeroth magic-link delivery evidence without printing
+Cloudflare credentials or admin tokens. If the deployment switches to
+`MAGIC_LINK_DELIVERY=webhook`, the same status command checks the HTTPS webhook
+configuration and live delivery evidence instead of reporting Cloudflare Email
+Service blockers.
 `npm run zeroth:backend:status` includes the same result as `email_summary` and
-adds the Email Service blockers to the stricter `auth0_replacement` gate.
+adds magic-link delivery blockers to the stricter `auth0_replacement` gate.
 
 The output separates live issuer readiness from full Auth0 retirement. A
 `phase` of `zeroth_ready` means `id.wavey.ai` is serving the Zeroth issuer and
@@ -295,7 +300,7 @@ requires Apple, Google, and Spotify target provider coverage, the seeded relying
 clients, the Zeroth-owned route, D1-backed user/admin/audit persistence, and
 local-auth delivery evidence. Today that block can remain `ready:false` while
 Apple/Google login is usable, for example while Spotify is disabled by
-deployment or Cloudflare Email Sending has not proven magic-link delivery.
+deployment or the selected magic-link sender has not proven delivery.
 
 `DEFAULT_LOGIN_CLIENT_ID` is used by legacy browser SSO entry points such as
 `/login?return_to=...` when the relying app does not send an explicit

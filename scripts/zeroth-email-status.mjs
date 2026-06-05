@@ -62,47 +62,54 @@ export async function emailStatusSummary({
   fetchFn = globalThis.fetch,
 } = {}) {
   const binding = emailBindingFromConfig(config);
+  const configuredTransport = magicLinkTransportFromConfig({ config, env });
   const sender = env.MAGIC_LINK_FROM || config?.vars?.MAGIC_LINK_FROM || "";
   const senderDomain = emailDomain(sender);
-  const configured = Boolean(binding?.name) && validEmail(sender);
+  const senderConfigured = validEmail(sender);
   const senderAllowed = senderAllowedByBinding(sender, binding);
-  const configBlockers = [];
-  if (!binding?.name) {
-    configBlockers.push("missing send_email binding");
-  }
-  if (!validEmail(sender)) {
-    configBlockers.push("MAGIC_LINK_FROM must be a valid email address");
-  }
-  if (!senderAllowed) {
-    configBlockers.push("MAGIC_LINK_FROM is not allowed by send_email binding");
-  }
+  const liveStatus = live
+    ? await liveLocalAuthStatus({ issuer, env, envFileValues, fetchFn })
+    : null;
+  const effectiveTransport =
+    liveStatus?.magic_link?.delivery || configuredTransport.transport;
+  const transport = magicLinkTransportStatus({
+    transport: effectiveTransport,
+    configuredTransport,
+    binding,
+    sender,
+    senderConfigured,
+    senderAllowed,
+    config,
+  });
 
-  const accountPlan = remote
-    ? await cloudflareWorkersPlanStatus({ config, env, fetchFn })
-    : null;
-  const remoteStatus = remote
-    ? {
-        account_plan: accountPlan,
-        zones: commandStatus(
-          runCommand("npx", ["wrangler@4.98.0", "email", "sending", "list"]),
-        ),
-        dns: senderDomain
-          ? commandStatus(
-              runCommand("npx", [
-                "wrangler@4.98.0",
-                "email",
-                "sending",
-                "dns",
-                "get",
-                senderDomain,
-              ]),
-            )
-          : skippedCommand("missing sender domain"),
-      }
-    : null;
+  const accountPlan =
+    remote && transport.kind === "cloudflare_email"
+      ? await cloudflareWorkersPlanStatus({ config, env, fetchFn })
+      : null;
+  const remoteStatus =
+    remote && transport.kind === "cloudflare_email"
+      ? {
+          account_plan: accountPlan,
+          zones: commandStatus(
+            runCommand("npx", ["wrangler@4.98.0", "email", "sending", "list"]),
+          ),
+          dns: senderDomain
+            ? commandStatus(
+                runCommand("npx", [
+                  "wrangler@4.98.0",
+                  "email",
+                  "sending",
+                  "dns",
+                  "get",
+                  senderDomain,
+                ]),
+              )
+            : skippedCommand("missing sender domain"),
+        }
+      : null;
 
   const sendStatus =
-    sendTest && validEmail(sender)
+    sendTest && transport.kind === "cloudflare_email" && validEmail(sender)
       ? commandStatus(
           runCommand("npx", [
             "wrangler@4.98.0",
@@ -123,13 +130,11 @@ export async function emailStatusSummary({
         )
       : null;
 
-  const liveStatus = live
-    ? await liveLocalAuthStatus({ issuer, env, envFileValues, fetchFn })
-    : null;
   const liveBlockers = liveLocalAuthBlockers(liveStatus);
-  const remoteBlockers = remoteEmailBlockers(remoteStatus, sendStatus);
+  const remoteBlockers = remoteEmailBlockers(remoteStatus, sendStatus, transport);
+  const configBlockers = transport.blockers;
   const blockers = [...configBlockers, ...liveBlockers, ...remoteBlockers];
-  const ready = configured && senderAllowed && liveBlockers.length === 0 && blockers.length === 0;
+  const ready = transport.configured && liveBlockers.length === 0 && blockers.length === 0;
 
   return {
     ok: requireReady ? ready : true,
@@ -139,28 +144,103 @@ export async function emailStatusSummary({
     live_checked: live,
     send_test: sendTest,
     config: {
+      delivery: configuredTransport.transport,
+      effective_delivery: effectiveTransport,
       binding_name: binding?.name || null,
       binding_configured: Boolean(binding?.name),
       sender,
       sender_domain: senderDomain,
       sender_allowed: senderAllowed,
       allowed_sender_addresses: binding?.allowed_sender_addresses || null,
+      webhook_url_configured: configuredTransport.webhook_url_configured,
     },
     live: liveStatus,
+    transport,
     cloudflare_email: {
       account_plan: remoteStatus?.account_plan || null,
       zones: remoteStatus?.zones || null,
       dns: remoteStatus?.dns || null,
       send: sendStatus,
+      skipped:
+        remote && transport.kind !== "cloudflare_email"
+          ? `magic link delivery is ${transport.kind}`
+          : null,
     },
     blockers,
     next_actions: emailNextActions(blockers, {
       remote,
       sendTest,
+      transport,
       zones: remoteStatus?.zones,
       dns: remoteStatus?.dns,
       send: sendStatus,
     }),
+  };
+}
+
+function magicLinkTransportFromConfig({ config = {}, env = {} } = {}) {
+  const configured = env.MAGIC_LINK_DELIVERY || config?.vars?.MAGIC_LINK_DELIVERY || "";
+  const transport = normalizeMagicLinkDelivery(configured);
+  const webhookUrl = env.MAGIC_LINK_WEBHOOK_URL || config?.vars?.MAGIC_LINK_WEBHOOK_URL || "";
+  return {
+    transport,
+    raw: configured || null,
+    webhook_url_configured: validHttpsUrl(webhookUrl),
+  };
+}
+
+function normalizeMagicLinkDelivery(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || normalized === "cloudflare" || normalized === "cloudflare_email") {
+    return "cloudflare_email";
+  }
+  if (normalized === "webhook") {
+    return "webhook";
+  }
+  return "unsupported";
+}
+
+function magicLinkTransportStatus({
+  transport,
+  configuredTransport,
+  binding,
+  sender,
+  senderConfigured,
+  senderAllowed,
+} = {}) {
+  const kind = normalizeMagicLinkDelivery(transport);
+  const blockers = [];
+  if (!senderConfigured) {
+    blockers.push("MAGIC_LINK_FROM must be a valid email address");
+  }
+  if (kind === "cloudflare_email") {
+    if (!binding?.name) {
+      blockers.push("missing send_email binding");
+    }
+    if (!senderAllowed) {
+      blockers.push("MAGIC_LINK_FROM is not allowed by send_email binding");
+    }
+    return {
+      kind,
+      configured: senderConfigured && Boolean(binding?.name) && senderAllowed,
+      blockers,
+    };
+  }
+  if (kind === "webhook") {
+    if (!configuredTransport.webhook_url_configured) {
+      blockers.push("MAGIC_LINK_WEBHOOK_URL must be a valid HTTPS URL");
+    }
+    return {
+      kind,
+      configured: senderConfigured && configuredTransport.webhook_url_configured,
+      blockers,
+    };
+  }
+  blockers.push("MAGIC_LINK_DELIVERY must be cloudflare_email or webhook");
+  return {
+    kind,
+    configured: false,
+    blockers,
   };
 }
 
@@ -386,7 +466,10 @@ function cloudflareApiError(body = {}) {
     .find(Boolean) || "";
 }
 
-function remoteEmailBlockers(remoteStatus, sendStatus) {
+function remoteEmailBlockers(remoteStatus, sendStatus, transport = {}) {
+  if (transport.kind && transport.kind !== "cloudflare_email") {
+    return [];
+  }
   const blockers = [];
   const accountPlan = remoteStatus?.account_plan;
   if (accountPlan && !accountPlan.skipped && !accountPlan.ok) {
@@ -409,16 +492,27 @@ function remoteEmailBlockers(remoteStatus, sendStatus) {
   return blockers;
 }
 
-function emailNextActions(blockers, { remote, sendTest, zones, dns, send }) {
+function emailNextActions(blockers, { remote, sendTest, transport = {}, zones, dns, send }) {
   const actions = [];
+  const delivery = transport.kind || "cloudflare_email";
   const missingWorkersPaid = blockers.some((blocker) =>
     blocker.includes("requires Workers Paid plan"),
   );
+  if (blockers.some((blocker) => blocker.includes("MAGIC_LINK_WEBHOOK_URL"))) {
+    actions.push("configure MAGIC_LINK_WEBHOOK_URL with the HTTPS email sender endpoint");
+  }
+  if (blockers.some((blocker) => blocker.includes("MAGIC_LINK_DELIVERY"))) {
+    actions.push("set MAGIC_LINK_DELIVERY to cloudflare_email or webhook");
+  }
   if (missingWorkersPaid) {
     actions.push("enable Workers Paid for the Cloudflare account before using Email Service");
   }
   if (blockers.some((blocker) => blocker.includes("delivery failed recently"))) {
-    actions.push("repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link");
+    actions.push(
+      delivery === "webhook"
+        ? "repair the magic-link webhook sender, then request a fresh magic link"
+        : "repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link",
+    );
   }
   if (zones && !zones.ok && !missingWorkersPaid) {
     actions.push("use a Cloudflare credential with Email Sending read permissions to inspect onboarding");
@@ -429,10 +523,10 @@ function emailNextActions(blockers, { remote, sendTest, zones, dns, send }) {
   if (send && !send.ok) {
     actions.push("retry npm run zeroth:email:send-test after Cloudflare Email Sending is healthy");
   }
-  if (!remote) {
+  if (!remote && delivery === "cloudflare_email") {
     actions.push("run npm run zeroth:email:status to include Cloudflare Email Sending inspection");
   }
-  if (!sendTest) {
+  if (!sendTest && delivery === "cloudflare_email") {
     actions.push("run npm run zeroth:email:send-test to attempt a minimal Cloudflare email send");
   }
   return [...new Set(actions)];
@@ -508,6 +602,18 @@ function readEnvFile(rootDir, envFile) {
 
 function validEmail(value) {
   return typeof value === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
+}
+
+function validHttpsUrl(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return false;
+  }
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" && Boolean(url.hostname);
+  } catch (_error) {
+    return false;
+  }
 }
 
 function emailDomain(value) {

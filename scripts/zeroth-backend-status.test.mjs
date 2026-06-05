@@ -210,6 +210,79 @@ test("backend status reports Swift readiness blockers in replacement gate", () =
   assert.match(summary.next_actions.join("\n"), /zeroth:swift:status/);
 });
 
+test("backend status reports webhook email blockers without Cloudflare wording", () => {
+  const summary = backendStatusSummary({
+    requireBackend: true,
+    rollout: rolloutStatus({
+      live_backend: "zeroth_ready",
+      zeroth_live: true,
+    }),
+    liveAdmin: liveAdmin({
+      ready_status: 200,
+      ready: true,
+      admin: {
+        db_status: 200,
+        clients_status: 200,
+        client_count: 5,
+        client_ids: seededClientIds(),
+        local_auth_status: 200,
+        local_auth_methods: [
+          {
+            id: "magic_link",
+            enabled: true,
+            delivery: "webhook",
+            notes: [],
+            deliveryStatus: {
+              lastIssueAt: 1780630448,
+              lastSentAt: 1780630448,
+            },
+          },
+        ],
+      },
+    }),
+    providerStatus: readyProviderStatus(),
+    emailStatus: {
+      ready: false,
+      remote_checked: true,
+      live_checked: true,
+      send_test: false,
+      config: {
+        delivery: "webhook",
+        effective_delivery: "webhook",
+        binding_configured: false,
+        sender: "login@wavey.ai",
+        sender_allowed: null,
+        webhook_url_configured: false,
+      },
+      transport: {
+        kind: "webhook",
+        configured: false,
+        blockers: ["MAGIC_LINK_WEBHOOK_URL must be a valid HTTPS URL"],
+      },
+      cloudflare_email: {
+        skipped: "magic link delivery is webhook",
+      },
+      blockers: ["MAGIC_LINK_WEBHOOK_URL must be a valid HTTPS URL"],
+    },
+  });
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.backend_ready, true);
+  assert.equal(summary.email_summary.transport, "webhook");
+  assert.equal(summary.email_summary.config.webhook_url_configured, false);
+  assert.deepEqual(summary.email_blockers, [
+    "MAGIC_LINK_WEBHOOK_URL must be a valid HTTPS URL",
+  ]);
+  assert.equal(summary.auth0_replacement.ready, false);
+  assert.match(
+    summary.auth0_replacement.blockers.join("\n"),
+    /Magic-link webhook: MAGIC_LINK_WEBHOOK_URL must be a valid HTTPS URL/,
+  );
+  assert.doesNotMatch(summary.auth0_replacement.blockers.join("\n"), /Cloudflare Email Service/);
+  assert.match(summary.next_actions.join("\n"), /MAGIC_LINK_WEBHOOK_URL/);
+  assert.doesNotMatch(summary.next_actions.join("\n"), /zeroth:email:send-test/);
+});
+
 test("backend status reports hosted login blockers in replacement gate", () => {
   const summary = backendStatusSummary({
     requireBackend: true,

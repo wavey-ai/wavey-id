@@ -145,6 +145,75 @@ test("email status is ready when config and live delivery are clean", async () =
   assert.deepEqual(summary.blockers, []);
 });
 
+test("email status supports webhook magic link delivery without Cloudflare probes", async () => {
+  const commands = [];
+  const summary = await emailStatusSummary({
+    requireReady: true,
+    remote: true,
+    sendTest: true,
+    live: true,
+    config: {
+      account_id: "account-123",
+      vars: {
+        PRODUCT_NAME: "Wavey ID",
+        MAGIC_LINK_FROM: "login@wavey.ai",
+        MAGIC_LINK_DELIVERY: "webhook",
+        MAGIC_LINK_WEBHOOK_URL: "https://mail.wavey.ai/zeroth",
+      },
+      send_email: [],
+    },
+    envFileValues: { ADMIN_TOKEN: "admin-token" },
+    runCommand: (command, args) => {
+      commands.push([command, ...args].join(" "));
+      return failed("should not run");
+    },
+    fetchFn: async (url) => {
+      assert.equal(url, "https://id.wavey.ai/local-auth/status");
+      return jsonResponse(200, {
+        methods: [
+          {
+            id: "magic_link",
+            enabled: true,
+            delivery: "webhook",
+            notes: [],
+            deliveryStatus: {
+              lastIssueAt: 1780630448,
+              lastSentAt: 1780630448,
+            },
+          },
+        ],
+      });
+    },
+  });
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.ready, true);
+  assert.equal(summary.transport.kind, "webhook");
+  assert.equal(summary.config.effective_delivery, "webhook");
+  assert.equal(summary.cloudflare_email.skipped, "magic link delivery is webhook");
+  assert.deepEqual(summary.blockers, []);
+  assert.deepEqual(commands, []);
+});
+
+test("email status reports webhook configuration blockers", async () => {
+  const summary = await emailStatusSummary({
+    config: {
+      vars: {
+        MAGIC_LINK_FROM: "login@wavey.ai",
+        MAGIC_LINK_DELIVERY: "webhook",
+      },
+      send_email: [],
+    },
+  });
+
+  assert.equal(summary.ready, false);
+  assert.equal(summary.transport.kind, "webhook");
+  assert.deepEqual(summary.blockers, [
+    "MAGIC_LINK_WEBHOOK_URL must be a valid HTTPS URL",
+  ]);
+  assert.match(summary.next_actions.join("\n"), /MAGIC_LINK_WEBHOOK_URL/);
+});
+
 test("email status catches sender not allowed by restricted binding", async () => {
   const summary = await emailStatusSummary({
     config: {

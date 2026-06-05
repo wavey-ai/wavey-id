@@ -67,7 +67,7 @@ function runCli(rawArgs) {
     providerStatus: providerStatus.json,
     loginStatus: commandJsonOrFailure(loginStatus, "hosted provider login status command failed"),
     persistenceStatus: commandJsonOrFailure(persistenceStatus, "D1 persistence status command failed"),
-    emailStatus: commandJsonOrFailure(emailStatus, "Cloudflare Email Sending status command failed"),
+    emailStatus: commandJsonOrFailure(emailStatus, "magic-link email delivery status command failed"),
     swiftStatus: commandJsonOrFailure(swiftStatus, "Swift/iOS status command failed"),
     commandStatus: {
       rollout_status: rollout.status,
@@ -197,6 +197,7 @@ export function backendStatusSummary({
       loginBlockers,
       persistenceBlockers,
       emailBlockers,
+      emailStatus,
       swiftBlockers,
       providersReady,
       auth0Replacement,
@@ -276,8 +277,9 @@ function auth0ReplacementSummary({
   for (const blocker of persistenceBlockers) {
     blockers.push(`D1 persistence: ${blocker}`);
   }
+  const emailBlockerPrefix = emailDeliveryBlockerPrefix(emailStatus);
   for (const blocker of emailBlockers) {
-    blockers.push(`Cloudflare Email Service: ${blocker}`);
+    blockers.push(`${emailBlockerPrefix}: ${blocker}`);
   }
   for (const blocker of swiftBlockers) {
     blockers.push(`Swift/iOS: ${blocker}`);
@@ -489,29 +491,39 @@ function emailSummary(emailStatus) {
     return {
       checked: false,
       ready: null,
+      transport: null,
       config: {},
       account_plan: null,
       blockers: [],
     };
   }
   const accountPlan = emailStatus.cloudflare_email?.account_plan || null;
+  const transport = emailDeliveryKind(emailStatus);
   return {
     checked: true,
     ready: emailStatus.ready ?? null,
+    transport,
     remote_checked: emailStatus.remote_checked ?? null,
     live_checked: emailStatus.live_checked ?? null,
     send_test: emailStatus.send_test ?? null,
     config: {
+      delivery: emailStatus.config?.delivery || null,
+      effective_delivery: emailStatus.config?.effective_delivery || transport,
       binding_configured: emailStatus.config?.binding_configured ?? null,
       sender: emailStatus.config?.sender || null,
       sender_allowed: emailStatus.config?.sender_allowed ?? null,
+      webhook_url_configured: emailStatus.config?.webhook_url_configured ?? null,
     },
+    transport_status: emailStatus.transport || null,
     account_plan: accountPlan
       ? {
           ok: accountPlan.ok ?? null,
           workers_paid: accountPlan.workers_paid ?? null,
         }
       : null,
+    cloudflare_email: {
+      skipped: emailStatus.cloudflare_email?.skipped || null,
+    },
     blockers: Array.isArray(emailStatus.blockers) ? emailStatus.blockers : [],
   };
 }
@@ -529,6 +541,10 @@ function emailBlockerSummary(emailStatus) {
       return false;
     }
     return (
+      blocker.includes("missing send_email binding") ||
+      blocker.includes("MAGIC_LINK_FROM ") ||
+      blocker.includes("MAGIC_LINK_WEBHOOK_URL ") ||
+      blocker.includes("MAGIC_LINK_DELIVERY ") ||
       blocker.includes("Cloudflare Email Service requires Workers Paid plan") ||
       blocker.includes("Cloudflare account subscription check failed") ||
       blocker.includes("Cloudflare Email Sending zone listing failed") ||
@@ -536,6 +552,21 @@ function emailBlockerSummary(emailStatus) {
       blocker.includes("Cloudflare Email Sending test send failed")
     );
   });
+}
+
+function emailDeliveryKind(emailStatus = {}) {
+  return (
+    emailStatus.transport?.kind ||
+    emailStatus.config?.effective_delivery ||
+    emailStatus.config?.delivery ||
+    "cloudflare_email"
+  );
+}
+
+function emailDeliveryBlockerPrefix(emailStatus = {}) {
+  return emailDeliveryKind(emailStatus) === "webhook"
+    ? "Magic-link webhook"
+    : "Cloudflare Email Service";
 }
 
 function swiftSummary(swiftStatus) {
@@ -579,6 +610,7 @@ function nextActions({
   loginBlockers,
   persistenceBlockers,
   emailBlockers,
+  emailStatus,
   swiftBlockers,
   providersReady,
   auth0Replacement,
@@ -612,21 +644,28 @@ function nextActions({
     ];
   }
   if (localAuthBlockers.length > 0) {
-    const emailActions = emailNextActions(emailBlockers);
-    return [
+    const emailActions = emailNextActions(emailBlockers, emailStatus);
+    const actions = [
       ...spotifyActions,
-      "run npm run zeroth:email:status to inspect Cloudflare Email Sending and live magic-link evidence",
+      emailInspectAction(emailStatus),
       ...emailActions,
-      "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link",
-      "run npm run zeroth:email:send-test to attempt a minimal Cloudflare email send",
+      emailRepairAction(emailStatus),
       "re-run npm run zeroth:backend:status and check local_auth_summary.magic_link.delivery_status",
     ];
+    if (emailDeliveryKind(emailStatus) === "cloudflare_email") {
+      actions.splice(
+        actions.length - 1,
+        0,
+        "run npm run zeroth:email:send-test to attempt a minimal Cloudflare email send",
+      );
+    }
+    return [...new Set(actions)];
   }
   if (emailBlockers.length > 0) {
     return [
-      "run npm run zeroth:email:status to inspect Cloudflare Email Sending and live magic-link evidence",
-      ...emailNextActions(emailBlockers),
-      "repair Cloudflare Email Sending for wavey.ai, then re-run npm run zeroth:backend:status",
+      emailInspectAction(emailStatus),
+      ...emailNextActions(emailBlockers, emailStatus),
+      `${emailRepairAction(emailStatus)}, then re-run npm run zeroth:backend:status`,
     ];
   }
   if (swiftBlockers.length > 0) {
@@ -641,8 +680,18 @@ function nextActions({
   return [];
 }
 
-function emailNextActions(emailBlockers = []) {
+function emailNextActions(emailBlockers = [], emailStatus = {}) {
   const actions = [];
+  if (
+    emailBlockers.some((blocker) => blocker.includes("MAGIC_LINK_WEBHOOK_URL"))
+  ) {
+    actions.push("configure MAGIC_LINK_WEBHOOK_URL with the HTTPS email sender endpoint");
+  }
+  if (
+    emailBlockers.some((blocker) => blocker.includes("MAGIC_LINK_DELIVERY"))
+  ) {
+    actions.push("set MAGIC_LINK_DELIVERY to cloudflare_email or webhook");
+  }
   if (
     emailBlockers.some((blocker) =>
       blocker.includes("requires Workers Paid plan"),
@@ -651,6 +700,18 @@ function emailNextActions(emailBlockers = []) {
     actions.push("enable Workers Paid for the Cloudflare account before using Email Service");
   }
   return actions;
+}
+
+function emailInspectAction(emailStatus = {}) {
+  return emailDeliveryKind(emailStatus) === "webhook"
+    ? "run npm run zeroth:email:status to inspect webhook magic-link delivery and live evidence"
+    : "run npm run zeroth:email:status to inspect Cloudflare Email Sending and live magic-link evidence";
+}
+
+function emailRepairAction(emailStatus = {}) {
+  return emailDeliveryKind(emailStatus) === "webhook"
+    ? "repair the magic-link webhook sender, then request a fresh magic link"
+    : "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link";
 }
 
 function spotifyNextActions(auth0Replacement = {}) {
