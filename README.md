@@ -777,7 +777,7 @@ Apple App Site Association payload shape:
 
 ### Bitneedle
 
-Login URL:
+Interactive login URL for checking the shared Zeroth browser session:
 
 ```text
 https://id.wavey.ai/login?return_to=https%3A%2F%2Fbitneedle.com%2Fdataroom%2F
@@ -786,7 +786,26 @@ https://id.wavey.ai/login?return_to=https%3A%2F%2Fbitneedle.com%2Fdataroom%2F
 That uses the deployment's `DEFAULT_LOGIN_CLIENT_ID=wavey-browser`. A narrower
 client can be selected explicitly with `client_id=bitneedle-web`.
 
-Session/profile check from browser JS:
+Server-side product gates should use the OIDC authorization-code flow instead
+of relying on the `id.wavey.ai` cookie. Generate a random `state`, `nonce`, and
+PKCE `code_verifier`, store those in the product's own short-lived callback
+state, and redirect to Zeroth:
+
+```text
+https://id.wavey.ai/authorize?client_id=bitneedle-web&redirect_uri=https%3A%2F%2Fbitneedle.com%2Fauth%2Fcallback&response_type=code&scope=openid%20email%20profile&state=...&nonce=...&code_challenge=...&code_challenge_method=S256
+```
+
+On `https://bitneedle.com/auth/callback`, verify `state` and
+`iss=https://id.wavey.ai`, exchange the code at `POST /oauth/token` with the
+same `code_verifier`, validate the access token by calling Zeroth `/userinfo` or
+verifying Zeroth's JWKS/issuer/audience locally, and then set a Bitneedle-local
+session cookie for protected content. The generic
+`zeroth-oidc` crate now contains helpers for PKCE challenge calculation,
+authorization URL construction, callback parsing, token form encoding, and token
+response decoding so product Workers do not need to hand-roll those details.
+
+Session/profile check from browser JS only works when the browser is allowed to
+send the `id.wavey.ai` cookie:
 
 ```js
 const res = await fetch("https://id.wavey.ai/session", {
@@ -803,8 +822,7 @@ https://id.wavey.ai/validate
 Note: browser cookies from `id.wavey.ai` are not sent to `bitneedle.com`.
 Bitneedle's dataroom login remains disabled for now with
 `BITNEEDLE_AUTH_BYPASS = "always"`. Before restoring a server-side Bitneedle
-gate, add a site callback/token handoff flow or use client-side session checks
-against `id.wavey.ai`.
+gate, wire the callback/token handoff above and store a Bitneedle-local session.
 
 ### Infidelity
 
