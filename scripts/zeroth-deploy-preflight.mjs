@@ -39,7 +39,7 @@ runCommand("d1_schema_and_clients", npxCommand(), [
   "--config",
   "wrangler.zeroth.jsonc",
   "--command",
-  "SELECT COUNT(*) AS client_count FROM zeroth_clients; SELECT COUNT(*) AS allowed_email_domain_column_count FROM pragma_table_info('zeroth_clients') WHERE name = 'allowed_email_domains_json'; SELECT COUNT(*) AS provider_nonce_column_count FROM pragma_table_info('zeroth_auth_transactions') WHERE name = 'provider_nonce'",
+  "SELECT COUNT(*) AS client_count FROM zeroth_clients; SELECT COUNT(*) AS allowed_email_domain_column_count FROM pragma_table_info('zeroth_clients') WHERE name = 'allowed_email_domains_json'; SELECT COUNT(*) AS provider_nonce_column_count FROM pragma_table_info('zeroth_auth_transactions') WHERE name = 'provider_nonce'; SELECT COUNT(*) AS local_credentials_table_count FROM sqlite_master WHERE type = 'table' AND name = 'zeroth_local_credentials'; SELECT COUNT(*) AS magic_links_table_count FROM sqlite_master WHERE type = 'table' AND name = 'zeroth_magic_links'",
 ], {
   hint: "Create the D1 database, patch wrangler.zeroth.jsonc, then run npm run zeroth:d1:init.",
   validate: (result) => {
@@ -57,6 +57,14 @@ runCommand("d1_schema_and_clients", npxCommand(), [
     const providerNonceColumnCount = d1ScalarValue(result.stdout, "provider_nonce_column_count");
     if (providerNonceColumnCount !== 1) {
       return "missing zeroth_auth_transactions.provider_nonce compatibility column";
+    }
+    const localCredentialsTableCount = d1ScalarValue(result.stdout, "local_credentials_table_count");
+    if (localCredentialsTableCount !== 1) {
+      return "missing zeroth_local_credentials table";
+    }
+    const magicLinksTableCount = d1ScalarValue(result.stdout, "magic_links_table_count");
+    if (magicLinksTableCount !== 1) {
+      return "missing zeroth_magic_links table";
     }
     return null;
   },

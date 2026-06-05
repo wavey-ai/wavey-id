@@ -57,4 +57,7 @@ $WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
   --command "INSERT OR IGNORE INTO zeroth_schema_migrations (version, name, applied_at) VALUES (3, 'admin_memberships', strftime('%s','now'))"
 
 $WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
+  --command "INSERT OR IGNORE INTO zeroth_schema_migrations (version, name, applied_at) VALUES (4, 'local_auth', strftime('%s','now'))"
+
+$WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
   --file "$ROOT/zeroth.clients.sql"
