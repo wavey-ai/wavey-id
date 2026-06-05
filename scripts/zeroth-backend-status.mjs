@@ -48,6 +48,13 @@ function runCli(rawArgs) {
   const persistenceStatus = runJson("persistence_status", "node", [
     "scripts/zeroth-persistence-status.mjs",
   ]);
+  const emailStatus = runJson("email_status", "node", [
+    "scripts/zeroth-email-status.mjs",
+    "--live",
+    "--remote",
+    "--env-file",
+    ".wrangler/zeroth-bootstrap.env",
+  ]);
   const swiftStatus = runJson("swift_status", "node", [
     "scripts/zeroth-swift-status.mjs",
   ]);
@@ -60,6 +67,7 @@ function runCli(rawArgs) {
     providerStatus: providerStatus.json,
     loginStatus: commandJsonOrFailure(loginStatus, "hosted provider login status command failed"),
     persistenceStatus: commandJsonOrFailure(persistenceStatus, "D1 persistence status command failed"),
+    emailStatus: commandJsonOrFailure(emailStatus, "Cloudflare Email Sending status command failed"),
     swiftStatus: commandJsonOrFailure(swiftStatus, "Swift/iOS status command failed"),
     commandStatus: {
       rollout_status: rollout.status,
@@ -67,6 +75,7 @@ function runCli(rawArgs) {
       provider_status_remote: providerStatus.status,
       login_status: loginStatus.status,
       persistence_status: persistenceStatus.status,
+      email_status: emailStatus.status,
       swift_status: swiftStatus.status,
     },
   });
@@ -86,6 +95,7 @@ export function backendStatusSummary({
   providerStatus = {},
   loginStatus,
   persistenceStatus,
+  emailStatus,
   swiftStatus,
   commandStatus = {},
 } = {}) {
@@ -120,6 +130,7 @@ export function backendStatusSummary({
   const localAuthBlockers = localAuthBlockerSummary(localAuth);
   const loginBlockers = loginBlockerSummary(loginStatus);
   const persistenceBlockers = persistenceBlockerSummary(persistenceStatus);
+  const emailBlockers = emailBlockerSummary(emailStatus);
   const swiftBlockers = swiftBlockerSummary(swiftStatus);
   const providersReady =
     providerStatus?.remote_ready === true && live?.ready === true && live?.ready_status === 200;
@@ -135,6 +146,8 @@ export function backendStatusSummary({
     loginStatus,
     persistenceBlockers,
     persistenceStatus,
+    emailBlockers,
+    emailStatus,
     swiftBlockers,
     swiftStatus,
   });
@@ -167,6 +180,7 @@ export function backendStatusSummary({
     local_auth_summary: localAuth,
     login_summary: loginSummary(loginStatus),
     persistence_summary: persistenceSummary(persistenceStatus),
+    email_summary: emailSummary(emailStatus),
     swift_summary: swiftSummary(swiftStatus),
     auth0_replacement: auth0Replacement,
     backend_blockers: backendBlockers,
@@ -174,6 +188,7 @@ export function backendStatusSummary({
     local_auth_blockers: localAuthBlockers,
     login_blockers: loginBlockers,
     persistence_blockers: persistenceBlockers,
+    email_blockers: emailBlockers,
     swift_blockers: swiftBlockers,
     next_actions: nextActions({
       backendBlockers,
@@ -181,6 +196,7 @@ export function backendStatusSummary({
       localAuthBlockers,
       loginBlockers,
       persistenceBlockers,
+      emailBlockers,
       swiftBlockers,
       providersReady,
       auth0Replacement,
@@ -200,6 +216,8 @@ function auth0ReplacementSummary({
   loginStatus,
   persistenceBlockers = [],
   persistenceStatus,
+  emailBlockers = [],
+  emailStatus,
   swiftBlockers = [],
   swiftStatus,
 }) {
@@ -258,6 +276,9 @@ function auth0ReplacementSummary({
   for (const blocker of persistenceBlockers) {
     blockers.push(`D1 persistence: ${blocker}`);
   }
+  for (const blocker of emailBlockers) {
+    blockers.push(`Cloudflare Email Service: ${blocker}`);
+  }
   for (const blocker of swiftBlockers) {
     blockers.push(`Swift/iOS: ${blocker}`);
   }
@@ -267,6 +288,7 @@ function auth0ReplacementSummary({
     apple_google_ready: backendReady && providersReady,
     hosted_login_ready: loginStatus?.ready ?? null,
     persistence_ready: persistenceStatus?.ready ?? null,
+    email_delivery_ready: emailStatus?.ready ?? null,
     swift_ready: swiftStatus?.ready ?? null,
     target_provider_ids: replacementProviderIds,
     target_providers: targetProviders,
@@ -462,6 +484,60 @@ function persistenceBlockerSummary(persistenceStatus) {
   return ["D1-backed user/event persistence is not ready"];
 }
 
+function emailSummary(emailStatus) {
+  if (!emailStatus || typeof emailStatus !== "object") {
+    return {
+      checked: false,
+      ready: null,
+      config: {},
+      account_plan: null,
+      blockers: [],
+    };
+  }
+  const accountPlan = emailStatus.cloudflare_email?.account_plan || null;
+  return {
+    checked: true,
+    ready: emailStatus.ready ?? null,
+    remote_checked: emailStatus.remote_checked ?? null,
+    live_checked: emailStatus.live_checked ?? null,
+    send_test: emailStatus.send_test ?? null,
+    config: {
+      binding_configured: emailStatus.config?.binding_configured ?? null,
+      sender: emailStatus.config?.sender || null,
+      sender_allowed: emailStatus.config?.sender_allowed ?? null,
+    },
+    account_plan: accountPlan
+      ? {
+          ok: accountPlan.ok ?? null,
+          workers_paid: accountPlan.workers_paid ?? null,
+        }
+      : null,
+    blockers: Array.isArray(emailStatus.blockers) ? emailStatus.blockers : [],
+  };
+}
+
+function emailBlockerSummary(emailStatus) {
+  if (!emailStatus || typeof emailStatus !== "object") {
+    return [];
+  }
+  if (emailStatus.ready === true) {
+    return [];
+  }
+  const blockers = Array.isArray(emailStatus.blockers) ? emailStatus.blockers : [];
+  return blockers.filter((blocker) => {
+    if (typeof blocker !== "string") {
+      return false;
+    }
+    return (
+      blocker.includes("Cloudflare Email Service requires Workers Paid plan") ||
+      blocker.includes("Cloudflare account subscription check failed") ||
+      blocker.includes("Cloudflare Email Sending zone listing failed") ||
+      blocker.includes("Cloudflare Email Sending DNS check failed") ||
+      blocker.includes("Cloudflare Email Sending test send failed")
+    );
+  });
+}
+
 function swiftSummary(swiftStatus) {
   if (!swiftStatus || typeof swiftStatus !== "object") {
     return {
@@ -502,6 +578,7 @@ function nextActions({
   localAuthBlockers,
   loginBlockers,
   persistenceBlockers,
+  emailBlockers,
   swiftBlockers,
   providersReady,
   auth0Replacement,
@@ -535,12 +612,21 @@ function nextActions({
     ];
   }
   if (localAuthBlockers.length > 0) {
+    const emailActions = emailNextActions(emailBlockers);
     return [
       ...spotifyActions,
       "run npm run zeroth:email:status to inspect Cloudflare Email Sending and live magic-link evidence",
+      ...emailActions,
       "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link",
       "run npm run zeroth:email:send-test to attempt a minimal Cloudflare email send",
       "re-run npm run zeroth:backend:status and check local_auth_summary.magic_link.delivery_status",
+    ];
+  }
+  if (emailBlockers.length > 0) {
+    return [
+      "run npm run zeroth:email:status to inspect Cloudflare Email Sending and live magic-link evidence",
+      ...emailNextActions(emailBlockers),
+      "repair Cloudflare Email Sending for wavey.ai, then re-run npm run zeroth:backend:status",
     ];
   }
   if (swiftBlockers.length > 0) {
@@ -553,6 +639,18 @@ function nextActions({
     return spotifyActions;
   }
   return [];
+}
+
+function emailNextActions(emailBlockers = []) {
+  const actions = [];
+  if (
+    emailBlockers.some((blocker) =>
+      blocker.includes("requires Workers Paid plan"),
+    )
+  ) {
+    actions.push("enable Workers Paid for the Cloudflare account before using Email Service");
+  }
+  return actions;
 }
 
 function spotifyNextActions(auth0Replacement = {}) {

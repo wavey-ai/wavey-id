@@ -285,6 +285,8 @@ Cloudflare Email Service requires an active Workers Paid account plan. The email
 status script checks the account subscriptions, the `send_email` binding, sender
 restrictions, Email Sending DNS/status APIs, and live Zeroth magic-link delivery
 evidence without printing Cloudflare credentials or admin tokens.
+`npm run zeroth:backend:status` includes the same result as `email_summary` and
+adds the Email Service blockers to the stricter `auth0_replacement` gate.
 
 The output separates live issuer readiness from full Auth0 retirement. A
 `phase` of `zeroth_ready` means `id.wavey.ai` is serving the Zeroth issuer and

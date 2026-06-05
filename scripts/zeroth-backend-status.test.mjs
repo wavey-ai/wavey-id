@@ -125,6 +125,7 @@ test("backend status reports magic link delivery blockers without failing backen
       ],
       warnings: [],
     },
+    emailStatus: emailStatusWorkersPaidMissing(),
   });
 
   assert.equal(summary.ok, true);
@@ -138,7 +139,14 @@ test("backend status reports magic link delivery blockers without failing backen
     summary.local_auth_summary.magic_link.delivery_status.lastErrorDetail,
     "email.sending.error.internal_server [code: 10002]",
   );
+  assert.equal(summary.email_summary.account_plan.workers_paid, false);
+  assert.deepEqual(summary.email_blockers, [
+    "Cloudflare Email Service requires Workers Paid plan; account has no active Workers Paid subscription",
+    "Cloudflare Email Sending zone listing failed: Unauthorized [code: 2036]",
+    "Cloudflare Email Sending DNS check failed: Unauthorized [code: 2036]",
+  ]);
   assert.equal(summary.auth0_replacement.apple_google_ready, true);
+  assert.equal(summary.auth0_replacement.email_delivery_ready, false);
   assert.equal(summary.auth0_replacement.ready, false);
   assert.deepEqual(summary.auth0_replacement.missing_client_ids, []);
   assert.match(
@@ -149,8 +157,13 @@ test("backend status reports magic link delivery blockers without failing backen
     summary.auth0_replacement.blockers.join("\n"),
     /local auth: magic link email delivery failed recently: email_internal_server_error \(email\.sending\.error\.internal_server \[code: 10002\]\)/,
   );
+  assert.match(
+    summary.auth0_replacement.blockers.join("\n"),
+    /Cloudflare Email Service: Cloudflare Email Service requires Workers Paid plan/,
+  );
   assert.match(summary.next_actions.join("\n"), /zeroth:email:status/);
   assert.match(summary.next_actions.join("\n"), /zeroth:email:send-test/);
+  assert.match(summary.next_actions.join("\n"), /enable Workers Paid/);
   assert.match(summary.next_actions.join("\n"), /zeroth:spotify:status/);
   assert.match(summary.next_actions.join("\n"), /DISABLED_PROVIDERS/);
 });
@@ -372,4 +385,39 @@ function seededClientIds() {
     "infidelity-web",
     "infidelity-macos",
   ];
+}
+
+function emailStatusWorkersPaidMissing() {
+  return {
+    ready: false,
+    remote_checked: true,
+    live_checked: true,
+    send_test: false,
+    config: {
+      binding_configured: true,
+      sender: "login@wavey.ai",
+      sender_allowed: true,
+    },
+    cloudflare_email: {
+      account_plan: {
+        ok: true,
+        workers_paid: false,
+      },
+      zones: {
+        ok: false,
+        error: "Unauthorized [code: 2036]",
+      },
+      dns: {
+        ok: false,
+        error: "Unauthorized [code: 2036]",
+      },
+    },
+    blockers: [
+      "magic link email delivery failed recently: email_internal_server_error (internal server error)",
+      "magic link email delivery is not proven",
+      "Cloudflare Email Service requires Workers Paid plan; account has no active Workers Paid subscription",
+      "Cloudflare Email Sending zone listing failed: Unauthorized [code: 2036]",
+      "Cloudflare Email Sending DNS check failed: Unauthorized [code: 2036]",
+    ],
+  };
 }
