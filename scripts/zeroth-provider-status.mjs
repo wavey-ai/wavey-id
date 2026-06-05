@@ -78,7 +78,7 @@ export function providerStatusSummary({
       clientSecretEnv: "SPOTIFY_CLIENT_SECRET",
     }),
   ];
-  const ready = providers.every((provider) => provider.ready);
+  const localReady = providers.every((provider) => provider.local_ready);
   const remoteProviderSecretsConfigured =
     remote && resolvedRemoteSecrets.ok
       ? providers.every((provider) => provider.remote_secret_configured)
@@ -87,10 +87,12 @@ export function providerStatusSummary({
     remote && resolvedRemoteSecrets.ok
       ? providers.every((provider) => provider.remote_ready)
       : null;
+  const ready = remote ? remoteReady === true : localReady;
 
   return {
     ok: (!requireReady || ready) && (!remote || resolvedRemoteSecrets.ok),
     ready,
+    local_ready: localReady,
     require_ready: requireReady,
     remote_checked: remote,
     remote_secrets_read: remote ? resolvedRemoteSecrets.ok : null,
@@ -102,6 +104,9 @@ export function providerStatusSummary({
     remote_ready: remoteReady,
     missing: providers.flatMap((provider) =>
       provider.missing.map((item) => `${provider.id}: ${item}`),
+    ),
+    local_missing: providers.flatMap((provider) =>
+      provider.local_missing.map((item) => `${provider.id}: ${item}`),
     ),
     remote_missing: remote
       ? providers.flatMap((provider) =>
@@ -173,29 +178,35 @@ function appleStatus(context) {
     (context.remoteSecretSet.has("APPLE_PRIVATE_KEY") ||
       context.remoteSecretSet.has("APPLE_PRIVATE_KEY_PEM"));
   const remoteSecretConfigured = remoteStaticSecretReady || remoteRuntimeSigningReady;
-  const missing = [];
+  const localMissing = [];
   if (!clientIdConfigured) {
-    missing.push("APPLE_CLIENT_ID Sign in with Apple Service ID");
+    localMissing.push("APPLE_CLIENT_ID Sign in with Apple Service ID");
   }
   if (!secretConfigured) {
-    missing.push(
+    localMissing.push(
       "APPLE_CLIENT_SECRET or APPLE_TEAM_ID, APPLE_KEY_ID, and a Sign in with Apple private key",
     );
   }
   if (selectedPathRefused) {
-    missing.push("replace App Store Connect/admin key with a Sign in with Apple key");
+    localMissing.push("replace App Store Connect/admin key with a Sign in with Apple key");
   }
   const remoteMissing = [];
+  if (!clientIdConfigured) {
+    remoteMissing.push("APPLE_CLIENT_ID Sign in with Apple Service ID");
+  }
   if (context.remote && !remoteSecretConfigured) {
     remoteMissing.push(
       "APPLE_CLIENT_SECRET or APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_PRIVATE_KEY secret bindings",
     );
   }
+  const localReady = clientIdConfigured && secretConfigured;
+  const remoteReady = context.remote ? clientIdConfigured && remoteSecretConfigured : null;
 
   return {
     id: "apple",
     label: "Apple",
-    ready: clientIdConfigured && secretConfigured,
+    ready: context.remote ? remoteReady : localReady,
+    local_ready: localReady,
     client_id_configured: clientIdConfigured,
     client_id_source: context.config?.vars?.APPLE_CLIENT_ID
       ? "wrangler.zeroth.jsonc vars"
@@ -204,7 +215,7 @@ function appleStatus(context) {
         : null,
     secret_configured: secretConfigured,
     remote_secret_configured: context.remote ? remoteSecretConfigured : null,
-    remote_ready: context.remote ? clientIdConfigured && remoteSecretConfigured : null,
+    remote_ready: remoteReady,
     credentials: {
       apple_client_secret_configured: Boolean(env.APPLE_CLIENT_SECRET),
       apple_team_id_configured: Boolean(env.APPLE_TEAM_ID),
@@ -221,7 +232,8 @@ function appleStatus(context) {
       remote_apple_client_secret_configured: context.remote ? remoteStaticSecretReady : null,
       remote_apple_runtime_signing_configured: context.remote ? remoteRuntimeSigningReady : null,
     },
-    missing,
+    missing: context.remote ? remoteMissing : localMissing,
+    local_missing: localMissing,
     remote_missing: remoteMissing,
     warnings: appleWarnings(context, {
       explicitPrivateKeyPath,
@@ -243,22 +255,28 @@ function secretBackedProviderStatus(context, {
   const clientIdConfigured = configuredValue(clientId, clientIdPlaceholder);
   const secretConfigured = configuredValue(clientSecret, "");
   const remoteSecretConfigured = context.remoteSecretSet.has(clientSecretEnv);
-  const missing = [];
+  const localMissing = [];
   if (!clientIdConfigured) {
-    missing.push(`${clientIdEnv} OAuth client ID`);
+    localMissing.push(`${clientIdEnv} OAuth client ID`);
   }
   if (!secretConfigured) {
-    missing.push(`${clientSecretEnv} OAuth client secret`);
+    localMissing.push(`${clientSecretEnv} OAuth client secret`);
   }
   const remoteMissing = [];
+  if (!clientIdConfigured) {
+    remoteMissing.push(`${clientIdEnv} OAuth client ID`);
+  }
   if (context.remote && !remoteSecretConfigured) {
     remoteMissing.push(`${clientSecretEnv} Worker secret binding`);
   }
+  const localReady = clientIdConfigured && secretConfigured;
+  const remoteReady = context.remote ? clientIdConfigured && remoteSecretConfigured : null;
 
   return {
     id,
     label,
-    ready: clientIdConfigured && secretConfigured,
+    ready: context.remote ? remoteReady : localReady,
+    local_ready: localReady,
     client_id_configured: clientIdConfigured,
     client_id_source: context.config?.vars?.[clientIdEnv]
       ? "wrangler.zeroth.jsonc vars"
@@ -267,14 +285,15 @@ function secretBackedProviderStatus(context, {
         : null,
     secret_configured: secretConfigured,
     remote_secret_configured: context.remote ? remoteSecretConfigured : null,
-    remote_ready: context.remote ? clientIdConfigured && remoteSecretConfigured : null,
+    remote_ready: remoteReady,
     credentials: {
       [`${clientSecretEnv.toLowerCase()}_configured`]: Boolean(clientSecret),
       [`remote_${clientSecretEnv.toLowerCase()}_configured`]: context.remote
         ? remoteSecretConfigured
         : null,
     },
-    missing,
+    missing: context.remote ? remoteMissing : localMissing,
+    local_missing: localMissing,
     remote_missing: remoteMissing,
     warnings: [],
   };

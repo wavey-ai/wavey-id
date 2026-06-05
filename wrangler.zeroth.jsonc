@@ -24,7 +24,7 @@
     "APPLE_NATIVE_CLIENT_IDS": "ai.wavey.id",
     "APPLE_CLIENT_ID": "ai.wavey.zeroth",
     "GOOGLE_CLIENT_ID": "replace-with-google-oauth-client-id",
-    "SPOTIFY_CLIENT_ID": "replace-with-spotify-oauth-client-id"
+    "SPOTIFY_CLIENT_ID": "9d756b59b3af4a7ebae549b6ad3f86d4"
   },
   "d1_databases": [
     {

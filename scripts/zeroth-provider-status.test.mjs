@@ -48,7 +48,7 @@ test("provider status reports local provider readiness without leaking secrets",
 
 test("remote provider status accepts uploaded Worker secret bindings", () => {
   const summary = providerStatusSummary({
-    args: ["--remote"],
+    args: ["--remote", "--require-ready"],
     config,
     env: {},
     parentKeyInventory: emptyInventory,
@@ -64,16 +64,20 @@ test("remote provider status accepts uploaded Worker secret bindings", () => {
     },
   });
 
+  assert.equal(summary.ok, true);
+  assert.equal(summary.ready, true);
+  assert.equal(summary.local_ready, false);
   assert.equal(summary.remote_secrets_read, true);
   assert.equal(summary.remote_provider_secrets_configured, true);
   assert.equal(summary.remote_ready, true);
+  assert.deepEqual(summary.missing, []);
   assert.deepEqual(summary.remote_missing, []);
   assert.equal(summary.provider_secrets_configured, false);
 });
 
 test("remote provider status reports missing Worker secret bindings by provider", () => {
   const summary = providerStatusSummary({
-    args: ["--remote"],
+    args: ["--remote", "--require-ready"],
     config,
     env: {},
     parentKeyInventory: emptyInventory,
@@ -83,12 +87,17 @@ test("remote provider status reports missing Worker secret bindings by provider"
     },
   });
 
+  assert.equal(summary.ok, false);
+  assert.equal(summary.ready, false);
+  assert.equal(summary.local_ready, false);
   assert.equal(summary.remote_provider_secrets_configured, false);
-  assert.deepEqual(summary.remote_missing, [
+  const expectedMissing = [
     "apple: APPLE_CLIENT_SECRET or APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_PRIVATE_KEY secret bindings",
     "google: GOOGLE_CLIENT_SECRET Worker secret binding",
     "spotify: SPOTIFY_CLIENT_SECRET Worker secret binding",
-  ]);
+  ];
+  assert.deepEqual(summary.missing, expectedMissing);
+  assert.deepEqual(summary.remote_missing, expectedMissing);
 });
 
 test("provider status preserves App Store Connect key warning", () => {
