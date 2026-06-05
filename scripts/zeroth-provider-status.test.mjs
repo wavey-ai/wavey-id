@@ -100,6 +100,39 @@ test("remote provider status reports missing Worker secret bindings by provider"
   assert.deepEqual(summary.remote_missing, expectedMissing);
 });
 
+test("disabled providers are visible but not required for readiness", () => {
+  const summary = providerStatusSummary({
+    args: ["--remote", "--require-ready"],
+    config: {
+      vars: {
+        ...config.vars,
+        DISABLED_PROVIDERS: "spotify",
+      },
+    },
+    env: {},
+    parentKeyInventory: emptyInventory,
+    remoteSecrets: {
+      ok: true,
+      names: ["APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY", "GOOGLE_CLIENT_SECRET"],
+    },
+  });
+
+  const spotify = summary.providers.find((provider) => provider.id === "spotify");
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.ready, true);
+  assert.equal(summary.remote_provider_secrets_configured, true);
+  assert.deepEqual(summary.required_provider_ids, ["apple", "google"]);
+  assert.deepEqual(summary.disabled_provider_ids, ["spotify"]);
+  assert.deepEqual(summary.remote_missing, []);
+  assert.equal(spotify.disabled, true);
+  assert.equal(spotify.required, false);
+  assert.equal(spotify.ready, false);
+  assert.equal(spotify.remote_ready, false);
+  assert.deepEqual(spotify.notes, ["disabled_by_deployment"]);
+  assert.deepEqual(spotify.remote_missing, []);
+});
+
 test("provider status preserves App Store Connect key warning", () => {
   const summary = providerStatusSummary({
     config,

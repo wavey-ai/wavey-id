@@ -19,6 +19,12 @@ test("backend status passes when deployed backend is ready but providers are pen
       remote_provider_secrets_configured: false,
       remote_secrets_read: true,
       remote_ready: false,
+      required_provider_ids: ["apple", "google"],
+      providers: [
+        { id: "apple", label: "Apple" },
+        { id: "google", label: "Google" },
+        { id: "spotify", label: "Spotify", disabled: true },
+      ],
       missing: ["apple: APPLE_CLIENT_ID Sign in with Apple Service ID"],
       remote_missing: ["google: GOOGLE_CLIENT_SECRET Worker secret binding"],
       warnings: [],
@@ -31,7 +37,7 @@ test("backend status passes when deployed backend is ready but providers are pen
   assert.equal(summary.phase, "backend_ready_provider_config_pending");
   assert.deepEqual(summary.provider_blockers, [
     "replace placeholder provider client IDs in wrangler.zeroth.jsonc",
-    "upload Apple/Google/Spotify Worker secret bindings",
+    "upload Apple/Google Worker secret bindings",
   ]);
 });
 

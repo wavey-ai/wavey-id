@@ -145,8 +145,9 @@ Provider client IDs are non-secret Wrangler vars in `wrangler.zeroth.jsonc`:
 DEFAULT_LOGIN_CLIENT_ID=wavey-browser
 SESSION_COOKIE_DOMAIN=.wavey.ai
 APPLE_CLIENT_ID=ai.wavey.zeroth
-GOOGLE_CLIENT_ID=<Google OAuth client id>
-SPOTIFY_CLIENT_ID=<Spotify OAuth client id>
+GOOGLE_CLIENT_ID=659630448576-rdjkvjjggtj8p4ibm772tivi3m6qiqsn.apps.googleusercontent.com
+SPOTIFY_CLIENT_ID=9d756b59b3af4a7ebae549b6ad3f86d4
+DISABLED_PROVIDERS=spotify
 ```
 
 `SESSION_COOKIE_DOMAIN=.wavey.ai` is the Zeroth-native version of the useful
@@ -155,8 +156,12 @@ same HttpOnly browser session cookie. It does not make that cookie available to
 unrelated registrable domains such as `bitneedle.com` or `infidelity.io`; those
 apps still use Zeroth through OIDC redirects and their own app-local sessions.
 
-After replacing the remaining provider client IDs, run the strict deployment
-config verifier and deployment preflight:
+Spotify is intentionally disabled in this deployment until its app/account
+restriction is cleared. Disabled providers remain visible in admin status, but
+they are not required for `/ready`, rollout checks, or public login buttons.
+
+After changing provider client IDs or the disabled-provider list, run the strict
+deployment config verifier and deployment preflight:
 
 ```sh
 npm run zeroth:verify
@@ -729,9 +734,10 @@ https://id.wavey.ai
 ```
 
 macOS login is still disabled in the current app UI. Zeroth is the issuer to
-use when that UI is wired back up; Apple web login is configured on
-`id.wavey.ai`, while Google and Spotify provider config still need real app
-credentials.
+use when that UI is wired back up. Apple and Google web login are configured on
+`id.wavey.ai`; Spotify is present as a configured provider but disabled by
+`DISABLED_PROVIDERS=spotify` until the Spotify app/account restriction is
+cleared.
 
 ## Notes
 

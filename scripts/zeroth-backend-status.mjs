@@ -131,7 +131,8 @@ function providerBlockerSummary(providerStatus) {
     items.push("replace placeholder provider client IDs in wrangler.zeroth.jsonc");
   }
   if (providerStatus?.remote_provider_secrets_configured !== true) {
-    items.push("upload Apple/Google/Spotify Worker secret bindings");
+    const labels = requiredProviderLabels(providerStatus);
+    items.push(`upload ${labels} Worker secret bindings`);
   }
   return items;
 }
@@ -145,7 +146,7 @@ function nextActions({ backendBlockers, providerBlockers, providersReady }) {
   }
   if (!providersReady) {
     return [
-      "create provider apps and replace Apple/Google/Spotify client IDs in wrangler.zeroth.jsonc",
+      "create provider apps and replace active provider client IDs in wrangler.zeroth.jsonc",
       "upload provider secrets with npm run zeroth:secrets, then re-run npm run zeroth:backend:status",
     ];
   }
@@ -153,6 +154,21 @@ function nextActions({ backendBlockers, providerBlockers, providersReady }) {
     return providerBlockers;
   }
   return [];
+}
+
+function requiredProviderLabels(providerStatus = {}) {
+  const requiredIds = Array.isArray(providerStatus.required_provider_ids)
+    ? providerStatus.required_provider_ids
+    : [];
+  const providers = Array.isArray(providerStatus.providers) ? providerStatus.providers : [];
+  const labels = requiredIds.length > 0
+    ? requiredIds.map((id) => providerLabel(providers, id))
+    : ["active provider"];
+  return labels.join("/");
+}
+
+function providerLabel(providers, id) {
+  return providers.find((provider) => provider.id === id)?.label || id;
 }
 
 function runJson(name, command, commandArgs) {

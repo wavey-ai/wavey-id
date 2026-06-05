@@ -58,6 +58,7 @@ export function providerStatusSummary({
     parentKeyInventory,
     remote,
     remoteSecretSet,
+    disabledProviderSet: disabledProviderSet({ config, env, envFileValues }),
     validateApplePrivateKeyFn,
   };
 
@@ -78,14 +79,15 @@ export function providerStatusSummary({
       clientSecretEnv: "SPOTIFY_CLIENT_SECRET",
     }),
   ];
-  const localReady = providers.every((provider) => provider.local_ready);
+  const requiredProviders = providers.filter((provider) => !provider.disabled);
+  const localReady = requiredProviders.every((provider) => provider.local_ready);
   const remoteProviderSecretsConfigured =
     remote && resolvedRemoteSecrets.ok
-      ? providers.every((provider) => provider.remote_secret_configured)
+      ? requiredProviders.every((provider) => provider.remote_secret_configured)
       : null;
   const remoteReady =
     remote && resolvedRemoteSecrets.ok
-      ? providers.every((provider) => provider.remote_ready)
+      ? requiredProviders.every((provider) => provider.remote_ready)
       : null;
   const ready = remote ? remoteReady === true : localReady;
 
@@ -98,8 +100,14 @@ export function providerStatusSummary({
     remote_secrets_read: remote ? resolvedRemoteSecrets.ok : null,
     remote_secret_error: resolvedRemoteSecrets.error || null,
     providers,
-    provider_client_ids_configured: providers.every((provider) => provider.client_id_configured),
-    provider_secrets_configured: providers.every((provider) => provider.secret_configured),
+    required_provider_ids: requiredProviders.map((provider) => provider.id),
+    disabled_provider_ids: providers
+      .filter((provider) => provider.disabled)
+      .map((provider) => provider.id),
+    provider_client_ids_configured: requiredProviders.every(
+      (provider) => provider.client_id_configured,
+    ),
+    provider_secrets_configured: requiredProviders.every((provider) => provider.secret_configured),
     remote_provider_secrets_configured: remoteProviderSecretsConfigured,
     remote_ready: remoteReady,
     missing: providers.flatMap((provider) =>
@@ -125,6 +133,7 @@ export function providerStatusSummary({
 }
 
 function appleStatus(context) {
+  const disabled = providerDisabled(context, "apple");
   const env = {
     APPLE_CLIENT_SECRET: envValue(context, "APPLE_CLIENT_SECRET"),
     APPLE_TEAM_ID: envValue(context, "APPLE_TEAM_ID"),
@@ -205,7 +214,9 @@ function appleStatus(context) {
   return {
     id: "apple",
     label: "Apple",
-    ready: context.remote ? remoteReady : localReady,
+    disabled,
+    required: !disabled,
+    ready: disabled ? false : context.remote ? remoteReady : localReady,
     local_ready: localReady,
     client_id_configured: clientIdConfigured,
     client_id_source: context.config?.vars?.APPLE_CLIENT_ID
@@ -232,9 +243,10 @@ function appleStatus(context) {
       remote_apple_client_secret_configured: context.remote ? remoteStaticSecretReady : null,
       remote_apple_runtime_signing_configured: context.remote ? remoteRuntimeSigningReady : null,
     },
-    missing: context.remote ? remoteMissing : localMissing,
-    local_missing: localMissing,
-    remote_missing: remoteMissing,
+    missing: disabled ? [] : context.remote ? remoteMissing : localMissing,
+    local_missing: disabled ? [] : localMissing,
+    remote_missing: disabled ? [] : remoteMissing,
+    notes: disabled ? ["disabled_by_deployment"] : [],
     warnings: appleWarnings(context, {
       explicitPrivateKeyPath,
       selectedPrivateKeyPath,
@@ -250,6 +262,7 @@ function secretBackedProviderStatus(context, {
   clientIdPlaceholder,
   clientSecretEnv,
 }) {
+  const disabled = providerDisabled(context, id);
   const clientId = context.config?.vars?.[clientIdEnv] || envValue(context, clientIdEnv);
   const clientSecret = envValue(context, clientSecretEnv);
   const clientIdConfigured = configuredValue(clientId, clientIdPlaceholder);
@@ -275,7 +288,9 @@ function secretBackedProviderStatus(context, {
   return {
     id,
     label,
-    ready: context.remote ? remoteReady : localReady,
+    disabled,
+    required: !disabled,
+    ready: disabled ? false : context.remote ? remoteReady : localReady,
     local_ready: localReady,
     client_id_configured: clientIdConfigured,
     client_id_source: context.config?.vars?.[clientIdEnv]
@@ -292,11 +307,32 @@ function secretBackedProviderStatus(context, {
         ? remoteSecretConfigured
         : null,
     },
-    missing: context.remote ? remoteMissing : localMissing,
-    local_missing: localMissing,
-    remote_missing: remoteMissing,
+    missing: disabled ? [] : context.remote ? remoteMissing : localMissing,
+    local_missing: disabled ? [] : localMissing,
+    remote_missing: disabled ? [] : remoteMissing,
+    notes: disabled ? ["disabled_by_deployment"] : [],
     warnings: [],
   };
+}
+
+function disabledProviderSet({ config = {}, env = {}, envFileValues = {} }) {
+  const value = [
+    config?.vars?.DISABLED_PROVIDERS,
+    env.DISABLED_PROVIDERS,
+    envFileValues.DISABLED_PROVIDERS,
+  ]
+    .filter(Boolean)
+    .join(",");
+  return new Set(
+    value
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function providerDisabled(context, providerId) {
+  return context.disabledProviderSet?.has(String(providerId).toLowerCase()) === true;
 }
 
 function readRemoteSecrets({ rootDir, env }) {

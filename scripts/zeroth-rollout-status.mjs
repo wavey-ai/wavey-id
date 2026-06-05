@@ -88,10 +88,10 @@ if (providerStatus.json?.remote_secrets_read === false) {
   nextActions.push("inspect npm run zeroth:providers:status:remote output for the failing Wrangler secret list command");
 } else if (providerStatus.json && !providerStatus.json.remote_provider_secrets_configured) {
   const missingSecretProviders = (providerStatus.json.providers || [])
-    .filter((provider) => !provider.remote_secret_configured)
+    .filter((provider) => !provider.disabled && !provider.remote_secret_configured)
     .map((provider) => provider.id);
   blockers.push(`remote provider secret bindings are missing: ${missingSecretProviders.join(", ")}`);
-  nextActions.push("export Apple/Google/Spotify provider secrets, run npm run zeroth:providers:status, then npm run zeroth:secrets");
+  nextActions.push("export active provider secrets, run npm run zeroth:providers:status, then npm run zeroth:secrets");
 }
 
 if (!preflightChecks.d1_schema_and_clients?.ok) {
