@@ -405,10 +405,22 @@ async function checkLiveAdmin(baseUrl) {
     });
   }
 
+  const localAuthUrl = new URL("/local-auth/status", baseUrl);
+  const localAuthResponse = await fetchManual(localAuthUrl, { headers });
+  const localAuth = await parseJsonResponse(localAuthResponse, "local_auth_status");
+  if (localAuthResponse.status !== 200) {
+    fail("local_auth_status", {
+      status: localAuthResponse.status,
+      expected: 200,
+    });
+  }
+
   return {
     db_status: dbStatusResponse.status,
     clients_status: clientsResponse.status,
     client_count: actualClientIds.length,
+    local_auth_status: localAuthResponse.status,
+    local_auth_methods: Array.isArray(localAuth?.methods) ? localAuth.methods : [],
   };
 }
 

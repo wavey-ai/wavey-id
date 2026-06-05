@@ -35,6 +35,7 @@ test("backend status passes when deployed backend is ready but providers are pen
   assert.equal(summary.backend_ready, true);
   assert.equal(summary.providers_ready, false);
   assert.equal(summary.phase, "backend_ready_provider_config_pending");
+  assert.deepEqual(summary.local_auth_blockers, []);
   assert.deepEqual(summary.provider_blockers, [
     "replace placeholder provider client IDs in wrangler.zeroth.jsonc",
     "upload Apple/Google Worker secret bindings",
@@ -60,6 +61,54 @@ test("backend status fails backend require when a core check is red", () => {
   assert.equal(summary.backend_ready, false);
   assert.equal(summary.phase, "backend_not_ready");
   assert.deepEqual(summary.backend_blockers, ["d1_schema_and_clients"]);
+});
+
+test("backend status reports magic link delivery blockers without failing backend readiness", () => {
+  const summary = backendStatusSummary({
+    requireBackend: true,
+    rollout: rolloutStatus({
+      live_backend: "zeroth_ready",
+      zeroth_live: true,
+    }),
+    liveAdmin: liveAdmin({
+      ready_status: 200,
+      ready: true,
+      admin: {
+        db_status: 200,
+        clients_status: 200,
+        client_count: 5,
+        local_auth_status: 200,
+        local_auth_methods: [
+          {
+            id: "magic_link",
+            enabled: true,
+            delivery: "cloudflare_email",
+            notes: ["delivery_failed_recently"],
+            deliveryStatus: {
+              lastIssueAt: 1780630448,
+              lastFailedAt: 1780630448,
+              lastError: "email_internal_server_error",
+            },
+          },
+        ],
+      },
+    }),
+    providerStatus: {
+      provider_client_ids_configured: true,
+      remote_provider_secrets_configured: true,
+      remote_secrets_read: true,
+      remote_ready: true,
+      warnings: [],
+    },
+  });
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.backend_ready, true);
+  assert.equal(summary.providers_ready, true);
+  assert.deepEqual(summary.local_auth_blockers, [
+    "magic link email delivery failed recently: email_internal_server_error",
+  ]);
+  assert.equal(summary.local_auth_summary.magic_link.delivery_status.lastError, "email_internal_server_error");
 });
 
 function rolloutStatus(overrides = {}) {
@@ -91,6 +140,15 @@ function liveAdmin(overrides = {}) {
         db_status: 200,
         clients_status: 200,
         client_count: 5,
+        local_auth_status: 200,
+        local_auth_methods: [
+          {
+            id: "magic_link",
+            enabled: true,
+            delivery: "cloudflare_email",
+            notes: [],
+          },
+        ],
       },
       ...overrides,
     },

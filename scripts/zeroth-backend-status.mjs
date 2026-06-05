@@ -75,6 +75,7 @@ export function backendStatusSummary({
     admin_db_live: liveAdminStatus?.db_status === 200,
     seeded_clients_live:
       liveAdminStatus?.clients_status === 200 && Number(liveAdminStatus?.client_count || 0) >= 5,
+    local_auth_status_live: liveAdminStatus?.local_auth_status === 200,
     d1_schema_and_clients: rolloutStatus.d1_schema_and_clients === true,
     worker_api_read: rolloutStatus.worker_api_read === true,
     worker_secrets_read: rolloutStatus.worker_secrets_read === true,
@@ -89,6 +90,8 @@ export function backendStatusSummary({
     .filter(([_name, ok]) => !ok)
     .map(([name]) => name);
   const providerBlockers = providerBlockerSummary(providerStatus);
+  const localAuth = localAuthSummary(liveAdminStatus?.local_auth_methods);
+  const localAuthBlockers = localAuthBlockerSummary(localAuth);
   const providersReady =
     providerStatus?.remote_ready === true && live?.ready === true && live?.ready_status === 200;
   const backendReady = backendBlockers.length === 0;
@@ -118,9 +121,16 @@ export function backendStatusSummary({
       remote_missing: providerStatus?.remote_missing || [],
       warnings: providerStatus?.warnings || [],
     },
+    local_auth_summary: localAuth,
     backend_blockers: backendBlockers,
     provider_blockers: providerBlockers,
-    next_actions: nextActions({ backendBlockers, providerBlockers, providersReady }),
+    local_auth_blockers: localAuthBlockers,
+    next_actions: nextActions({
+      backendBlockers,
+      providerBlockers,
+      localAuthBlockers,
+      providersReady,
+    }),
     command_status: commandStatus,
   };
 }
@@ -137,7 +147,47 @@ function providerBlockerSummary(providerStatus) {
   return items;
 }
 
-function nextActions({ backendBlockers, providerBlockers, providersReady }) {
+function localAuthSummary(methods = []) {
+  const list = Array.isArray(methods) ? methods : [];
+  const magicLink = list.find((method) => method.id === "magic_link") || null;
+  return {
+    methods: list.map((method) => ({
+      id: method.id || null,
+      enabled: method.enabled === true,
+      delivery: method.delivery || null,
+      notes: Array.isArray(method.notes) ? method.notes : [],
+    })),
+    magic_link: magicLink
+      ? {
+          enabled: magicLink.enabled === true,
+          delivery: magicLink.delivery || null,
+          notes: Array.isArray(magicLink.notes) ? magicLink.notes : [],
+          delivery_status: magicLink.deliveryStatus || magicLink.delivery_status || null,
+        }
+      : null,
+  };
+}
+
+function localAuthBlockerSummary(summary) {
+  const items = [];
+  const magicLink = summary?.magic_link;
+  if (!magicLink) {
+    items.push("local auth status did not include magic link state");
+    return items;
+  }
+  if (!magicLink.enabled) {
+    items.push("magic link login is disabled");
+  }
+  if (magicLink.notes.includes("delivery_failed_recently")) {
+    const lastError = magicLink.delivery_status?.lastError || magicLink.delivery_status?.last_error;
+    items.push(`magic link email delivery failed recently${lastError ? `: ${lastError}` : ""}`);
+  } else if (magicLink.notes.includes("delivery_not_proven")) {
+    items.push("magic link email delivery is not proven");
+  }
+  return items;
+}
+
+function nextActions({ backendBlockers, providerBlockers, localAuthBlockers, providersReady }) {
   if (backendBlockers.length > 0) {
     return [
       "fix backend blockers, then re-run npm run zeroth:backend:status",
@@ -152,6 +202,12 @@ function nextActions({ backendBlockers, providerBlockers, providersReady }) {
   }
   if (providerBlockers.length > 0) {
     return providerBlockers;
+  }
+  if (localAuthBlockers.length > 0) {
+    return [
+      "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link",
+      "re-run npm run zeroth:backend:status and check local_auth_summary.magic_link.delivery_status",
+    ];
   }
   return [];
 }
