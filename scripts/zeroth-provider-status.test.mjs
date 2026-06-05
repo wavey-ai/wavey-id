@@ -129,7 +129,16 @@ test("disabled providers are visible but not required for readiness", () => {
   assert.equal(spotify.required, false);
   assert.equal(spotify.ready, false);
   assert.equal(spotify.remote_ready, false);
-  assert.deepEqual(spotify.notes, ["disabled_by_deployment"]);
+  assert.deepEqual(spotify.notes, [
+    "disabled_by_deployment",
+    "spotify_development_mode_owner_premium_required",
+    "spotify_development_mode_users_must_be_allowlisted",
+  ]);
+  assert.deepEqual(spotify.activation_requirements, [
+    "Spotify app owner account has Premium while the app is in development mode",
+    "Spotify test login user is allowlisted in the Spotify app Users Management tab",
+    "Spotify current-user profile endpoint /v1/me returns HTTP 200 for an authorized user",
+  ]);
   assert.deepEqual(spotify.remote_missing, []);
 });
 

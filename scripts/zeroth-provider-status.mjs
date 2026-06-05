@@ -71,7 +71,7 @@ export function providerStatusSummary({
       clientIdPlaceholder: "replace-with-google-oauth-client-id",
       clientSecretEnv: "GOOGLE_CLIENT_SECRET",
     }),
-    secretBackedProviderStatus(context, {
+    spotifyProviderStatus(context, {
       id: "spotify",
       label: "Spotify",
       clientIdEnv: "SPOTIFY_CLIENT_ID",
@@ -255,12 +255,29 @@ function appleStatus(context) {
   };
 }
 
+function spotifyProviderStatus(context, options) {
+  return secretBackedProviderStatus(context, {
+    ...options,
+    disabledNotes: [
+      "spotify_development_mode_owner_premium_required",
+      "spotify_development_mode_users_must_be_allowlisted",
+    ],
+    activationRequirements: [
+      "Spotify app owner account has Premium while the app is in development mode",
+      "Spotify test login user is allowlisted in the Spotify app Users Management tab",
+      "Spotify current-user profile endpoint /v1/me returns HTTP 200 for an authorized user",
+    ],
+  });
+}
+
 function secretBackedProviderStatus(context, {
   id,
   label,
   clientIdEnv,
   clientIdPlaceholder,
   clientSecretEnv,
+  disabledNotes = [],
+  activationRequirements = [],
 }) {
   const disabled = providerDisabled(context, id);
   const clientId = context.config?.vars?.[clientIdEnv] || envValue(context, clientIdEnv);
@@ -310,7 +327,8 @@ function secretBackedProviderStatus(context, {
     missing: disabled ? [] : context.remote ? remoteMissing : localMissing,
     local_missing: disabled ? [] : localMissing,
     remote_missing: disabled ? [] : remoteMissing,
-    notes: disabled ? ["disabled_by_deployment"] : [],
+    notes: disabled ? ["disabled_by_deployment", ...disabledNotes] : [],
+    activation_requirements: disabled ? activationRequirements : [],
     warnings: [],
   };
 }

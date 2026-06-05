@@ -159,6 +159,11 @@ apps still use Zeroth through OIDC redirects and their own app-local sessions.
 Spotify is intentionally disabled in this deployment until its app/account
 restriction is cleared. Disabled providers remain visible in admin status, but
 they are not required for `/ready`, rollout checks, or public login buttons.
+For Spotify development-mode apps, clear that restriction by making sure the
+Spotify app owner account has Premium, the test login user is allowlisted in
+the app's Users Management tab, and Spotify's current-user profile endpoint
+`/v1/me` returns HTTP 200 after authorization. Zeroth needs that profile call
+because Spotify does not issue an OIDC ID token for this provider path.
 
 After changing provider client IDs or the disabled-provider list, run the strict
 deployment config verifier and deployment preflight:

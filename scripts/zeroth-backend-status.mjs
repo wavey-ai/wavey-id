@@ -213,6 +213,9 @@ function auth0ReplacementSummary({
       ready,
       required_for_replacement: true,
       notes: Array.isArray(provider.notes) ? provider.notes : [],
+      activation_requirements: Array.isArray(provider.activation_requirements)
+        ? provider.activation_requirements
+        : [],
     };
   });
   const clientIds = Array.isArray(liveAdminStatus.client_ids) ? liveAdminStatus.client_ids : [];
@@ -234,7 +237,7 @@ function auth0ReplacementSummary({
   }
   for (const provider of targetProviders) {
     if (provider.disabled) {
-      blockers.push(`${provider.label} provider is disabled by deployment`);
+      blockers.push(providerDisabledBlocker(provider));
     } else if (!provider.ready) {
       blockers.push(`${provider.label} provider is not ready`);
     }
@@ -278,6 +281,16 @@ function auth0ReplacementSummary({
       "remove Auth0 environment variables after app cutover is verified",
     ],
   };
+}
+
+function providerDisabledBlocker(provider) {
+  const requirements = Array.isArray(provider.activation_requirements)
+    ? provider.activation_requirements.filter(Boolean)
+    : [];
+  const detail = requirements.length > 0
+    ? `: ${requirements.join("; ")}`
+    : "";
+  return `${provider.label} provider is disabled by deployment${detail}`;
 }
 
 function providerBlockerSummary(providerStatus) {

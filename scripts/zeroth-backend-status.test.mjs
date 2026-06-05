@@ -116,6 +116,11 @@ test("backend status reports magic link delivery blockers without failing backen
           disabled: true,
           remote_ready: true,
           notes: ["disabled_by_deployment"],
+          activation_requirements: [
+            "Spotify app owner account has Premium while the app is in development mode",
+            "Spotify test login user is allowlisted in the Spotify app Users Management tab",
+            "Spotify current-user profile endpoint /v1/me returns HTTP 200 for an authorized user",
+          ],
         },
       ],
       warnings: [],
@@ -138,7 +143,7 @@ test("backend status reports magic link delivery blockers without failing backen
   assert.deepEqual(summary.auth0_replacement.missing_client_ids, []);
   assert.match(
     summary.auth0_replacement.blockers.join("\n"),
-    /Spotify provider is disabled by deployment/,
+    /Spotify provider is disabled by deployment: Spotify app owner account has Premium while the app is in development mode; Spotify test login user is allowlisted in the Spotify app Users Management tab; Spotify current-user profile endpoint \/v1\/me returns HTTP 200 for an authorized user/,
   );
   assert.match(
     summary.auth0_replacement.blockers.join("\n"),
