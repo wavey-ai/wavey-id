@@ -24,6 +24,7 @@
     "ADMIN_EMAILS": "jamie@wavey.ai",
     "DISABLED_PROVIDERS": "spotify",
     "MAGIC_LINK_FROM": "login@wavey.ai",
+    "MAGIC_LINK_DELIVERY": "cloudflare_email",
     "APPLE_NATIVE_CLIENT_IDS": "ai.wavey.id",
     "APPLE_CLIENT_ID": "ai.wavey.zeroth",
     "GOOGLE_CLIENT_ID": "659630448576-rdjkvjjggtj8p4ibm772tivi3m6qiqsn.apps.googleusercontent.com",
