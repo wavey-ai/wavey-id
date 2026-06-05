@@ -513,6 +513,9 @@ function emailSummary(emailStatus) {
       sender: emailStatus.config?.sender || null,
       sender_allowed: emailStatus.config?.sender_allowed ?? null,
       webhook_url_configured: emailStatus.config?.webhook_url_configured ?? null,
+      resend_api_key_configured: emailStatus.config?.resend_api_key_configured ?? null,
+      mailchannels_api_key_configured:
+        emailStatus.config?.mailchannels_api_key_configured ?? null,
     },
     transport_status: emailStatus.transport || null,
     account_plan: accountPlan
@@ -545,6 +548,9 @@ function emailBlockerSummary(emailStatus) {
       blocker.includes("MAGIC_LINK_FROM ") ||
       blocker.includes("MAGIC_LINK_WEBHOOK_URL ") ||
       blocker.includes("MAGIC_LINK_DELIVERY ") ||
+      blocker.includes("RESEND_API_KEY ") ||
+      blocker.includes("MAILCHANNELS_API_KEY ") ||
+      blocker.includes("magic link provider secret listing failed") ||
       blocker.includes("Cloudflare Email Service requires Workers Paid plan") ||
       blocker.includes("Cloudflare account subscription check failed") ||
       blocker.includes("Cloudflare Email Sending zone listing failed") ||
@@ -564,9 +570,17 @@ function emailDeliveryKind(emailStatus = {}) {
 }
 
 function emailDeliveryBlockerPrefix(emailStatus = {}) {
-  return emailDeliveryKind(emailStatus) === "webhook"
-    ? "Magic-link webhook"
-    : "Cloudflare Email Service";
+  const delivery = emailDeliveryKind(emailStatus);
+  if (delivery === "webhook") {
+    return "Magic-link webhook";
+  }
+  if (delivery === "resend") {
+    return "Resend magic-link email";
+  }
+  if (delivery === "mailchannels") {
+    return "MailChannels magic-link email";
+  }
+  return "Cloudflare Email Service";
 }
 
 function swiftSummary(swiftStatus) {
@@ -690,7 +704,16 @@ function emailNextActions(emailBlockers = [], emailStatus = {}) {
   if (
     emailBlockers.some((blocker) => blocker.includes("MAGIC_LINK_DELIVERY"))
   ) {
-    actions.push("set MAGIC_LINK_DELIVERY to cloudflare_email or webhook");
+    actions.push("set MAGIC_LINK_DELIVERY to cloudflare_email, webhook, resend, or mailchannels");
+  }
+  if (emailBlockers.some((blocker) => blocker.includes("RESEND_API_KEY"))) {
+    actions.push("upload RESEND_API_KEY or MAGIC_LINK_RESEND_API_KEY with wrangler secret put");
+  }
+  if (emailBlockers.some((blocker) => blocker.includes("MAILCHANNELS_API_KEY"))) {
+    actions.push(
+      "upload MAILCHANNELS_API_KEY or MAGIC_LINK_MAILCHANNELS_API_KEY with wrangler secret put",
+    );
+    actions.push("configure MailChannels Domain Lockdown and SPF for the sender domain");
   }
   if (
     emailBlockers.some((blocker) =>
@@ -703,15 +726,31 @@ function emailNextActions(emailBlockers = [], emailStatus = {}) {
 }
 
 function emailInspectAction(emailStatus = {}) {
-  return emailDeliveryKind(emailStatus) === "webhook"
-    ? "run npm run zeroth:email:status to inspect webhook magic-link delivery and live evidence"
-    : "run npm run zeroth:email:status to inspect Cloudflare Email Sending and live magic-link evidence";
+  const delivery = emailDeliveryKind(emailStatus);
+  if (delivery === "webhook") {
+    return "run npm run zeroth:email:status to inspect webhook magic-link delivery and live evidence";
+  }
+  if (delivery === "resend") {
+    return "run npm run zeroth:email:status to inspect Resend magic-link delivery and live evidence";
+  }
+  if (delivery === "mailchannels") {
+    return "run npm run zeroth:email:status to inspect MailChannels magic-link delivery and live evidence";
+  }
+  return "run npm run zeroth:email:status to inspect Cloudflare Email Sending and live magic-link evidence";
 }
 
 function emailRepairAction(emailStatus = {}) {
-  return emailDeliveryKind(emailStatus) === "webhook"
-    ? "repair the magic-link webhook sender, then request a fresh magic link"
-    : "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link";
+  const delivery = emailDeliveryKind(emailStatus);
+  if (delivery === "webhook") {
+    return "repair the magic-link webhook sender, then request a fresh magic link";
+  }
+  if (delivery === "resend") {
+    return "repair Resend sender/domain/API key setup, then request a fresh magic link";
+  }
+  if (delivery === "mailchannels") {
+    return "repair MailChannels sender/domain/API key setup, then request a fresh magic link";
+  }
+  return "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link";
 }
 
 function spotifyNextActions(auth0Replacement = {}) {

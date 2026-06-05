@@ -89,6 +89,10 @@ export ADMIN_TOKEN=...
 # Optional after the first Zeroth admin user has logged in:
 # export ADMIN_USER_IDS=usr_...
 # export ADMIN_EMAILS=you@wavey.ai
+# Optional if MAGIC_LINK_DELIVERY=resend:
+# export RESEND_API_KEY=...
+# Optional if MAGIC_LINK_DELIVERY=mailchannels:
+# export MAILCHANNELS_API_KEY=...
 export APPLE_APP_SITE_ASSOCIATION_JSON='{"webcredentials":{"apps":["<APPLE_TEAM_ID>.ai.wavey.infidelity"]}}'
 npm run zeroth:secrets:check
 npm run zeroth:secrets
@@ -289,7 +293,11 @@ DNS/status APIs, and live Zeroth magic-link delivery evidence without printing
 Cloudflare credentials or admin tokens. If the deployment switches to
 `MAGIC_LINK_DELIVERY=webhook`, the same status command checks the HTTPS webhook
 configuration and live delivery evidence instead of reporting Cloudflare Email
-Service blockers.
+Service blockers. Zeroth also supports `MAGIC_LINK_DELIVERY=resend` with
+`RESEND_API_KEY`/`MAGIC_LINK_RESEND_API_KEY`, and
+`MAGIC_LINK_DELIVERY=mailchannels` with
+`MAILCHANNELS_API_KEY`/`MAGIC_LINK_MAILCHANNELS_API_KEY`; in those modes the
+status command checks remote Worker secret presence and live delivery evidence.
 `npm run zeroth:backend:status` includes the same result as `email_summary` and
 adds magic-link delivery blockers to the stricter `auth0_replacement` gate.
 

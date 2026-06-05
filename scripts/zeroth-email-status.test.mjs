@@ -214,6 +214,77 @@ test("email status reports webhook configuration blockers", async () => {
   assert.match(summary.next_actions.join("\n"), /MAGIC_LINK_WEBHOOK_URL/);
 });
 
+test("email status supports Resend magic link delivery with remote secret", async () => {
+  const commands = [];
+  const summary = await emailStatusSummary({
+    requireReady: true,
+    remote: true,
+    live: true,
+    config: {
+      account_id: "account-123",
+      vars: {
+        MAGIC_LINK_FROM: "login@wavey.ai",
+        MAGIC_LINK_DELIVERY: "resend",
+      },
+      send_email: [],
+    },
+    envFileValues: { ADMIN_TOKEN: "admin-token" },
+    runCommand: (command, args) => {
+      commands.push([command, ...args].join(" "));
+      assert.deepEqual(args, ["wrangler", "secret", "list", "--config", "wrangler.zeroth.jsonc"]);
+      return succeeded('[{"name":"RESEND_API_KEY","type":"secret_text"}]');
+    },
+    fetchFn: async (url) => {
+      assert.equal(url, "https://id.wavey.ai/local-auth/status");
+      return jsonResponse(200, {
+        methods: [
+          {
+            id: "magic_link",
+            enabled: true,
+            delivery: "resend",
+            notes: [],
+            deliveryStatus: {
+              lastIssueAt: 1780630448,
+              lastSentAt: 1780630448,
+            },
+          },
+        ],
+      });
+    },
+  });
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.ready, true);
+  assert.equal(summary.transport.kind, "resend");
+  assert.equal(summary.config.effective_delivery, "resend");
+  assert.equal(summary.cloudflare_email.skipped, "magic link delivery is resend");
+  assert.deepEqual(summary.provider_secrets.names, ["RESEND_API_KEY"]);
+  assert.deepEqual(summary.blockers, []);
+  assert.equal(commands.length, 1);
+});
+
+test("email status reports MailChannels secret blockers", async () => {
+  const summary = await emailStatusSummary({
+    remote: true,
+    config: {
+      vars: {
+        MAGIC_LINK_FROM: "login@wavey.ai",
+        MAGIC_LINK_DELIVERY: "mailchannels",
+      },
+      send_email: [],
+    },
+    runCommand: () => succeeded("[]"),
+  });
+
+  assert.equal(summary.ready, false);
+  assert.equal(summary.transport.kind, "mailchannels");
+  assert.deepEqual(summary.blockers, [
+    "MAILCHANNELS_API_KEY or MAGIC_LINK_MAILCHANNELS_API_KEY Worker secret binding is missing",
+  ]);
+  assert.match(summary.next_actions.join("\n"), /MAILCHANNELS_API_KEY/);
+  assert.match(summary.next_actions.join("\n"), /Domain Lockdown/);
+});
+
 test("email status catches sender not allowed by restricted binding", async () => {
   const summary = await emailStatusSummary({
     config: {
@@ -248,5 +319,13 @@ function failed(stderr) {
     status: 1,
     stdout: "",
     stderr,
+  };
+}
+
+function succeeded(stdout) {
+  return {
+    status: 0,
+    stdout,
+    stderr: "",
   };
 }

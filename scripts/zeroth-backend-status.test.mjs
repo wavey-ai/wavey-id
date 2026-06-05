@@ -283,6 +283,76 @@ test("backend status reports webhook email blockers without Cloudflare wording",
   assert.doesNotMatch(summary.next_actions.join("\n"), /zeroth:email:send-test/);
 });
 
+test("backend status reports direct email provider blockers without Cloudflare wording", () => {
+  const summary = backendStatusSummary({
+    requireBackend: true,
+    rollout: rolloutStatus({
+      live_backend: "zeroth_ready",
+      zeroth_live: true,
+    }),
+    liveAdmin: liveAdmin({
+      ready_status: 200,
+      ready: true,
+      admin: {
+        db_status: 200,
+        clients_status: 200,
+        client_count: 5,
+        client_ids: seededClientIds(),
+        local_auth_status: 200,
+        local_auth_methods: [
+          {
+            id: "magic_link",
+            enabled: false,
+            delivery: "resend",
+            notes: ["missing_resend_api_key"],
+          },
+        ],
+      },
+    }),
+    providerStatus: readyProviderStatus(),
+    emailStatus: {
+      ready: false,
+      remote_checked: true,
+      live_checked: true,
+      send_test: false,
+      config: {
+        delivery: "resend",
+        effective_delivery: "resend",
+        binding_configured: false,
+        sender: "login@wavey.ai",
+        sender_allowed: null,
+        resend_api_key_configured: false,
+      },
+      transport: {
+        kind: "resend",
+        configured: false,
+        blockers: [
+          "RESEND_API_KEY or MAGIC_LINK_RESEND_API_KEY Worker secret binding is missing",
+        ],
+      },
+      cloudflare_email: {
+        skipped: "magic link delivery is resend",
+      },
+      blockers: [
+        "RESEND_API_KEY or MAGIC_LINK_RESEND_API_KEY Worker secret binding is missing",
+      ],
+    },
+  });
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.email_summary.transport, "resend");
+  assert.deepEqual(summary.email_blockers, [
+    "RESEND_API_KEY or MAGIC_LINK_RESEND_API_KEY Worker secret binding is missing",
+  ]);
+  assert.match(
+    summary.auth0_replacement.blockers.join("\n"),
+    /Resend magic-link email: RESEND_API_KEY/,
+  );
+  assert.doesNotMatch(summary.auth0_replacement.blockers.join("\n"), /Cloudflare Email Service/);
+  assert.match(summary.next_actions.join("\n"), /RESEND_API_KEY/);
+  assert.doesNotMatch(summary.next_actions.join("\n"), /zeroth:email:send-test/);
+});
+
 test("backend status reports hosted login blockers in replacement gate", () => {
   const summary = backendStatusSummary({
     requireBackend: true,

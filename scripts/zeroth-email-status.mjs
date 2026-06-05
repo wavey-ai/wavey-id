@@ -62,7 +62,7 @@ export async function emailStatusSummary({
   fetchFn = globalThis.fetch,
 } = {}) {
   const binding = emailBindingFromConfig(config);
-  const configuredTransport = magicLinkTransportFromConfig({ config, env });
+  const configuredTransport = magicLinkTransportFromConfig({ config, env, envFileValues });
   const sender = env.MAGIC_LINK_FROM || config?.vars?.MAGIC_LINK_FROM || "";
   const senderDomain = emailDomain(sender);
   const senderConfigured = validEmail(sender);
@@ -72,9 +72,14 @@ export async function emailStatusSummary({
     : null;
   const effectiveTransport =
     liveStatus?.magic_link?.delivery || configuredTransport.transport;
+  const remoteSecrets =
+    remote && directEmailProviderTransport(effectiveTransport)
+      ? remoteMagicLinkSecretStatus({ runCommand })
+      : null;
   const transport = magicLinkTransportStatus({
     transport: effectiveTransport,
     configuredTransport,
+    remoteSecrets,
     binding,
     sender,
     senderConfigured,
@@ -153,6 +158,8 @@ export async function emailStatusSummary({
       sender_allowed: senderAllowed,
       allowed_sender_addresses: binding?.allowed_sender_addresses || null,
       webhook_url_configured: configuredTransport.webhook_url_configured,
+      resend_api_key_configured: configuredTransport.resend_api_key_configured,
+      mailchannels_api_key_configured: configuredTransport.mailchannels_api_key_configured,
     },
     live: liveStatus,
     transport,
@@ -166,6 +173,7 @@ export async function emailStatusSummary({
           ? `magic link delivery is ${transport.kind}`
           : null,
     },
+    provider_secrets: remoteSecrets,
     blockers,
     next_actions: emailNextActions(blockers, {
       remote,
@@ -178,7 +186,7 @@ export async function emailStatusSummary({
   };
 }
 
-function magicLinkTransportFromConfig({ config = {}, env = {} } = {}) {
+function magicLinkTransportFromConfig({ config = {}, env = {}, envFileValues = {} } = {}) {
   const configured = env.MAGIC_LINK_DELIVERY || config?.vars?.MAGIC_LINK_DELIVERY || "";
   const transport = normalizeMagicLinkDelivery(configured);
   const webhookUrl = env.MAGIC_LINK_WEBHOOK_URL || config?.vars?.MAGIC_LINK_WEBHOOK_URL || "";
@@ -186,6 +194,16 @@ function magicLinkTransportFromConfig({ config = {}, env = {} } = {}) {
     transport,
     raw: configured || null,
     webhook_url_configured: validHttpsUrl(webhookUrl),
+    resend_api_key_configured: localSecretConfigured(
+      ["MAGIC_LINK_RESEND_API_KEY", "RESEND_API_KEY"],
+      env,
+      envFileValues,
+    ),
+    mailchannels_api_key_configured: localSecretConfigured(
+      ["MAGIC_LINK_MAILCHANNELS_API_KEY", "MAILCHANNELS_API_KEY"],
+      env,
+      envFileValues,
+    ),
   };
 }
 
@@ -197,12 +215,19 @@ function normalizeMagicLinkDelivery(value) {
   if (normalized === "webhook") {
     return "webhook";
   }
+  if (normalized === "resend") {
+    return "resend";
+  }
+  if (normalized === "mailchannels" || normalized === "mail_channels") {
+    return "mailchannels";
+  }
   return "unsupported";
 }
 
 function magicLinkTransportStatus({
   transport,
   configuredTransport,
+  remoteSecrets,
   binding,
   sender,
   senderConfigured,
@@ -236,11 +261,112 @@ function magicLinkTransportStatus({
       blockers,
     };
   }
-  blockers.push("MAGIC_LINK_DELIVERY must be cloudflare_email or webhook");
+  if (kind === "resend") {
+    const secretConfigured = magicLinkProviderSecretConfigured({
+      localConfigured: configuredTransport.resend_api_key_configured,
+      remoteSecrets,
+      names: ["MAGIC_LINK_RESEND_API_KEY", "RESEND_API_KEY"],
+    });
+    if (!secretConfigured) {
+      blockers.push("RESEND_API_KEY or MAGIC_LINK_RESEND_API_KEY Worker secret binding is missing");
+    }
+    if (remoteSecrets && !remoteSecrets.ok) {
+      blockers.push(`magic link provider secret listing failed: ${remoteSecrets.error}`);
+    }
+    return {
+      kind,
+      configured: senderConfigured && secretConfigured,
+      blockers,
+    };
+  }
+  if (kind === "mailchannels") {
+    const secretConfigured = magicLinkProviderSecretConfigured({
+      localConfigured: configuredTransport.mailchannels_api_key_configured,
+      remoteSecrets,
+      names: ["MAGIC_LINK_MAILCHANNELS_API_KEY", "MAILCHANNELS_API_KEY"],
+    });
+    if (!secretConfigured) {
+      blockers.push(
+        "MAILCHANNELS_API_KEY or MAGIC_LINK_MAILCHANNELS_API_KEY Worker secret binding is missing",
+      );
+    }
+    if (remoteSecrets && !remoteSecrets.ok) {
+      blockers.push(`magic link provider secret listing failed: ${remoteSecrets.error}`);
+    }
+    return {
+      kind,
+      configured: senderConfigured && secretConfigured,
+      blockers,
+    };
+  }
+  blockers.push("MAGIC_LINK_DELIVERY must be cloudflare_email, webhook, resend, or mailchannels");
   return {
     kind,
     configured: false,
     blockers,
+  };
+}
+
+function directEmailProviderTransport(transport) {
+  const kind = normalizeMagicLinkDelivery(transport);
+  return kind === "resend" || kind === "mailchannels";
+}
+
+function magicLinkProviderSecretConfigured({ localConfigured, remoteSecrets, names }) {
+  if (localConfigured) {
+    return true;
+  }
+  if (!remoteSecrets?.ok) {
+    return false;
+  }
+  const remoteSecretSet = new Set(remoteSecrets.names || []);
+  return names.some((name) => remoteSecretSet.has(name));
+}
+
+function localSecretConfigured(names, env = {}, envFileValues = {}) {
+  return names.some((name) => configuredSecretValue(env[name] || envFileValues[name]));
+}
+
+function configuredSecretValue(value) {
+  const text = String(value || "").trim();
+  const lower = text.toLowerCase();
+  return (
+    Boolean(text) &&
+    lower !== "changeme" &&
+    !lower.startsWith("replace-with-") &&
+    !(text.startsWith("<") && text.endsWith(">"))
+  );
+}
+
+function remoteMagicLinkSecretStatus({ runCommand }) {
+  const result = runCommand("npx", [
+    "wrangler",
+    "secret",
+    "list",
+    "--config",
+    "wrangler.zeroth.jsonc",
+  ]);
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      checked: true,
+      names: [],
+      error: commandError(result),
+    };
+  }
+  const parsed = jsonArrayFromOutput(result.stdout);
+  if (!Array.isArray(parsed)) {
+    return {
+      ok: false,
+      checked: true,
+      names: [],
+      error: "could not parse wrangler secret list JSON",
+    };
+  }
+  return {
+    ok: true,
+    checked: true,
+    names: parsed.map((secret) => secret?.name).filter(Boolean),
   };
 }
 
@@ -502,16 +628,23 @@ function emailNextActions(blockers, { remote, sendTest, transport = {}, zones, d
     actions.push("configure MAGIC_LINK_WEBHOOK_URL with the HTTPS email sender endpoint");
   }
   if (blockers.some((blocker) => blocker.includes("MAGIC_LINK_DELIVERY"))) {
-    actions.push("set MAGIC_LINK_DELIVERY to cloudflare_email or webhook");
+    actions.push("set MAGIC_LINK_DELIVERY to cloudflare_email, webhook, resend, or mailchannels");
+  }
+  if (blockers.some((blocker) => blocker.includes("RESEND_API_KEY"))) {
+    actions.push("upload RESEND_API_KEY or MAGIC_LINK_RESEND_API_KEY with wrangler secret put");
+  }
+  if (blockers.some((blocker) => blocker.includes("MAILCHANNELS_API_KEY"))) {
+    actions.push(
+      "upload MAILCHANNELS_API_KEY or MAGIC_LINK_MAILCHANNELS_API_KEY with wrangler secret put",
+    );
+    actions.push("configure MailChannels Domain Lockdown and SPF for the sender domain");
   }
   if (missingWorkersPaid) {
     actions.push("enable Workers Paid for the Cloudflare account before using Email Service");
   }
   if (blockers.some((blocker) => blocker.includes("delivery failed recently"))) {
     actions.push(
-      delivery === "webhook"
-        ? "repair the magic-link webhook sender, then request a fresh magic link"
-        : "repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link",
+      magicLinkRepairAction(delivery),
     );
   }
   if (zones && !zones.ok && !missingWorkersPaid) {
@@ -532,6 +665,19 @@ function emailNextActions(blockers, { remote, sendTest, transport = {}, zones, d
   return [...new Set(actions)];
 }
 
+function magicLinkRepairAction(delivery) {
+  if (delivery === "webhook") {
+    return "repair the magic-link webhook sender, then request a fresh magic link";
+  }
+  if (delivery === "resend") {
+    return "repair Resend sender/domain/API key setup, then request a fresh magic link";
+  }
+  if (delivery === "mailchannels") {
+    return "repair MailChannels sender/domain/API key setup, then request a fresh magic link";
+  }
+  return "repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link";
+}
+
 function commandStatus(result) {
   if (result.skipped) {
     return result;
@@ -541,6 +687,20 @@ function commandStatus(result) {
     status: result.status,
     error: result.status === 0 ? null : commandError(result),
   };
+}
+
+function jsonArrayFromOutput(output) {
+  const text = String(output || "");
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) {
+    return null;
+  }
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch (_error) {
+    return null;
+  }
 }
 
 function skippedCommand(reason) {
