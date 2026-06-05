@@ -42,6 +42,9 @@ function runCli(rawArgs) {
     "scripts/zeroth-provider-status.mjs",
     "--remote",
   ]);
+  const swiftStatus = runJson("swift_status", "node", [
+    "scripts/zeroth-swift-status.mjs",
+  ]);
 
   const summary = backendStatusSummary({
     requireBackend,
@@ -49,10 +52,12 @@ function runCli(rawArgs) {
     rollout: rollout.json,
     liveAdmin: liveAdmin.json,
     providerStatus: providerStatus.json,
+    swiftStatus: commandJsonOrFailure(swiftStatus, "Swift/iOS status command failed"),
     commandStatus: {
       rollout_status: rollout.status,
       live_admin_bootstrap: liveAdmin.status,
       provider_status_remote: providerStatus.status,
+      swift_status: swiftStatus.status,
     },
   });
 
@@ -69,6 +74,7 @@ export function backendStatusSummary({
   rollout = {},
   liveAdmin = {},
   providerStatus = {},
+  swiftStatus,
   commandStatus = {},
 } = {}) {
   const rolloutStatus = rollout?.status || {};
@@ -100,6 +106,7 @@ export function backendStatusSummary({
   const providerBlockers = providerBlockerSummary(providerStatus);
   const localAuth = localAuthSummary(liveAdminStatus?.local_auth_methods);
   const localAuthBlockers = localAuthBlockerSummary(localAuth);
+  const swiftBlockers = swiftBlockerSummary(swiftStatus);
   const providersReady =
     providerStatus?.remote_ready === true && live?.ready === true && live?.ready_status === 200;
   const backendReady = backendBlockers.length === 0;
@@ -110,6 +117,8 @@ export function backendStatusSummary({
     liveAdminStatus,
     providerStatus,
     localAuthBlockers,
+    swiftBlockers,
+    swiftStatus,
   });
 
   return {
@@ -138,14 +147,17 @@ export function backendStatusSummary({
       warnings: providerStatus?.warnings || [],
     },
     local_auth_summary: localAuth,
+    swift_summary: swiftSummary(swiftStatus),
     auth0_replacement: auth0Replacement,
     backend_blockers: backendBlockers,
     provider_blockers: providerBlockers,
     local_auth_blockers: localAuthBlockers,
+    swift_blockers: swiftBlockers,
     next_actions: nextActions({
       backendBlockers,
       providerBlockers,
       localAuthBlockers,
+      swiftBlockers,
       providersReady,
     }),
     command_status: commandStatus,
@@ -159,6 +171,8 @@ function auth0ReplacementSummary({
   liveAdminStatus = {},
   providerStatus = {},
   localAuthBlockers = [],
+  swiftBlockers = [],
+  swiftStatus,
 }) {
   const providers = Array.isArray(providerStatus.providers) ? providerStatus.providers : [];
   const targetProviders = replacementProviderIds.map((id) => {
@@ -206,10 +220,14 @@ function auth0ReplacementSummary({
   for (const blocker of localAuthBlockers) {
     blockers.push(`local auth: ${blocker}`);
   }
+  for (const blocker of swiftBlockers) {
+    blockers.push(`Swift/iOS: ${blocker}`);
+  }
 
   return {
     ready: blockers.length === 0,
     apple_google_ready: backendReady && providersReady,
+    swift_ready: swiftStatus?.ready ?? null,
     target_provider_ids: replacementProviderIds,
     target_providers: targetProviders,
     expected_client_ids: expectedClientIds,
@@ -278,7 +296,47 @@ function localAuthBlockerSummary(summary) {
   return items;
 }
 
-function nextActions({ backendBlockers, providerBlockers, localAuthBlockers, providersReady }) {
+function swiftSummary(swiftStatus) {
+  if (!swiftStatus || typeof swiftStatus !== "object") {
+    return {
+      checked: false,
+      ready: null,
+      client_id: null,
+      checks: {},
+      blockers: [],
+    };
+  }
+  return {
+    checked: true,
+    ready: swiftStatus.ready ?? null,
+    client_id: swiftStatus.client_id || null,
+    origin: swiftStatus.origin || null,
+    checks: swiftStatus.checks || {},
+    blockers: Array.isArray(swiftStatus.blockers) ? swiftStatus.blockers : [],
+  };
+}
+
+function swiftBlockerSummary(swiftStatus) {
+  if (!swiftStatus || typeof swiftStatus !== "object") {
+    return [];
+  }
+  if (swiftStatus.ready === true) {
+    return [];
+  }
+  const blockers = Array.isArray(swiftStatus.blockers) ? swiftStatus.blockers : [];
+  if (blockers.length > 0) {
+    return blockers;
+  }
+  return ["Swift/iOS native login is not ready"];
+}
+
+function nextActions({
+  backendBlockers,
+  providerBlockers,
+  localAuthBlockers,
+  swiftBlockers,
+  providersReady,
+}) {
   if (backendBlockers.length > 0) {
     return [
       "fix backend blockers, then re-run npm run zeroth:backend:status",
@@ -300,6 +358,12 @@ function nextActions({ backendBlockers, providerBlockers, localAuthBlockers, pro
       "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link",
       "run npm run zeroth:email:send-test to attempt a minimal Cloudflare email send",
       "re-run npm run zeroth:backend:status and check local_auth_summary.magic_link.delivery_status",
+    ];
+  }
+  if (swiftBlockers.length > 0) {
+    return [
+      "run npm run zeroth:swift:status to inspect native Swift/iOS login readiness",
+      "fix Swift/iOS blockers, then re-run npm run zeroth:backend:status",
     ];
   }
   return [];
@@ -333,6 +397,17 @@ function runJson(name, command, commandArgs) {
     name,
     status: result.status,
     json: parseJsonOutput(`${result.stdout || ""}\n${result.stderr || ""}`),
+  };
+}
+
+function commandJsonOrFailure(result, fallbackBlocker) {
+  if (result?.status === 0 && result?.json) {
+    return result.json;
+  }
+  return {
+    ok: false,
+    ready: false,
+    blockers: [fallbackBlocker],
   };
 }
 

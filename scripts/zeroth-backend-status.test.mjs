@@ -143,6 +143,48 @@ test("backend status reports magic link delivery blockers without failing backen
   assert.match(summary.next_actions.join("\n"), /zeroth:email:send-test/);
 });
 
+test("backend status reports Swift readiness blockers in replacement gate", () => {
+  const summary = backendStatusSummary({
+    requireBackend: true,
+    rollout: rolloutStatus({
+      live_backend: "zeroth_ready",
+      zeroth_live: true,
+    }),
+    liveAdmin: liveAdmin({
+      ready_status: 200,
+      ready: true,
+    }),
+    providerStatus: readyProviderStatus(),
+    swiftStatus: {
+      ready: false,
+      client_id: "wavey-ios",
+      origin: "https://id.wavey.ai",
+      checks: {
+        discovery: true,
+        client_registration: false,
+        native_apple_token_exchange: true,
+        prompt_none_redirects: true,
+      },
+      blockers: ["wavey-ios client registration is missing Swift redirect URIs"],
+    },
+  });
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.backend_ready, true);
+  assert.equal(summary.providers_ready, true);
+  assert.equal(summary.swift_summary.ready, false);
+  assert.deepEqual(summary.swift_blockers, [
+    "wavey-ios client registration is missing Swift redirect URIs",
+  ]);
+  assert.equal(summary.auth0_replacement.ready, false);
+  assert.equal(summary.auth0_replacement.swift_ready, false);
+  assert.match(
+    summary.auth0_replacement.blockers.join("\n"),
+    /Swift\/iOS: wavey-ios client registration is missing Swift redirect URIs/,
+  );
+  assert.match(summary.next_actions.join("\n"), /zeroth:swift:status/);
+});
+
 function rolloutStatus(overrides = {}) {
   return {
     status: {
@@ -155,6 +197,21 @@ function rolloutStatus(overrides = {}) {
       worker_startup_budget: true,
       ...overrides,
     },
+  };
+}
+
+function readyProviderStatus() {
+  return {
+    provider_client_ids_configured: true,
+    remote_provider_secrets_configured: true,
+    remote_secrets_read: true,
+    remote_ready: true,
+    providers: [
+      { id: "apple", label: "Apple", disabled: false, remote_ready: true },
+      { id: "google", label: "Google", disabled: false, remote_ready: true },
+      { id: "spotify", label: "Spotify", disabled: false, remote_ready: true },
+    ],
+    warnings: [],
   };
 }
 
