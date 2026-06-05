@@ -96,6 +96,7 @@ test("backend status reports magic link delivery blockers without failing backen
               lastIssueAt: 1780630448,
               lastFailedAt: 1780630448,
               lastError: "email_internal_server_error",
+              lastErrorDetail: "email.sending.error.internal_server [code: 10002]",
             },
           },
         ],
@@ -125,9 +126,13 @@ test("backend status reports magic link delivery blockers without failing backen
   assert.equal(summary.backend_ready, true);
   assert.equal(summary.providers_ready, true);
   assert.deepEqual(summary.local_auth_blockers, [
-    "magic link email delivery failed recently: email_internal_server_error",
+    "magic link email delivery failed recently: email_internal_server_error (email.sending.error.internal_server [code: 10002])",
   ]);
   assert.equal(summary.local_auth_summary.magic_link.delivery_status.lastError, "email_internal_server_error");
+  assert.equal(
+    summary.local_auth_summary.magic_link.delivery_status.lastErrorDetail,
+    "email.sending.error.internal_server [code: 10002]",
+  );
   assert.equal(summary.auth0_replacement.apple_google_ready, true);
   assert.equal(summary.auth0_replacement.ready, false);
   assert.deepEqual(summary.auth0_replacement.missing_client_ids, []);
@@ -137,7 +142,7 @@ test("backend status reports magic link delivery blockers without failing backen
   );
   assert.match(
     summary.auth0_replacement.blockers.join("\n"),
-    /local auth: magic link email delivery failed recently: email_internal_server_error/,
+    /local auth: magic link email delivery failed recently: email_internal_server_error \(email\.sending\.error\.internal_server \[code: 10002\]\)/,
   );
   assert.match(summary.next_actions.join("\n"), /zeroth:email:status/);
   assert.match(summary.next_actions.join("\n"), /zeroth:email:send-test/);

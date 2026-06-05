@@ -240,7 +240,7 @@ function liveLocalAuthBlockers(liveStatus) {
   const notes = Array.isArray(magicLink.notes) ? magicLink.notes : [];
   const deliveryStatus = magicLink.delivery_status || {};
   if (notes.includes("delivery_failed_recently")) {
-    const lastError = deliveryStatus.lastError || deliveryStatus.last_error || "";
+    const lastError = magicLinkDeliveryErrorSummary(deliveryStatus);
     blockers.push(
       `magic link email delivery failed recently${lastError ? `: ${lastError}` : ""}`,
     );
@@ -249,6 +249,40 @@ function liveLocalAuthBlockers(liveStatus) {
     blockers.push("magic link email delivery is not proven");
   }
   return blockers;
+}
+
+function magicLinkDeliveryErrorSummary(deliveryStatus = {}) {
+  const lastError = deliveryStatus.lastError || deliveryStatus.last_error || "";
+  const detail =
+    deliveryStatus.lastErrorDetail ||
+    deliveryStatus.last_error_detail ||
+    deliveryStatus.errorDetail ||
+    deliveryStatus.error_detail ||
+    "";
+  const safeLastError = boundedStatusText(lastError, 120);
+  const safeDetail = boundedStatusText(detail, 180);
+  if (safeLastError && safeDetail) {
+    return `${safeLastError} (${safeDetail})`;
+  }
+  return safeLastError || safeDetail;
+}
+
+function boundedStatusText(value, maxChars) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const text = value
+    .trim()
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, "[email]")
+    .replace(/\s+/g, " ");
+  if (!text) {
+    return "";
+  }
+  if (text.length <= maxChars) {
+    return text;
+  }
+  return `${text.slice(0, Math.max(0, maxChars - 3))}...`;
 }
 
 function remoteEmailBlockers(remoteStatus, sendStatus) {

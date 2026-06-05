@@ -35,6 +35,7 @@ test("email status reports live magic link delivery blockers", async () => {
               lastIssueAt: 1780630448,
               lastFailedAt: 1780630448,
               lastError: "email_internal_server_error",
+              lastErrorDetail: "email.sending.error.internal_server [code: 10002]",
             },
           },
         ],
@@ -46,7 +47,7 @@ test("email status reports live magic link delivery blockers", async () => {
   assert.equal(summary.config.sender, "login@wavey.ai");
   assert.equal(summary.config.sender_allowed, true);
   assert.deepEqual(summary.blockers, [
-    "magic link email delivery failed recently: email_internal_server_error",
+    "magic link email delivery failed recently: email_internal_server_error (email.sending.error.internal_server [code: 10002])",
     "magic link email delivery is not proven",
   ]);
   assert.match(summary.next_actions.join("\n"), /request a fresh magic link/);
