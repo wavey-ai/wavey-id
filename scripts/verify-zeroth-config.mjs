@@ -419,6 +419,7 @@ async function checkLiveAdmin(baseUrl) {
     db_status: dbStatusResponse.status,
     clients_status: clientsResponse.status,
     client_count: actualClientIds.length,
+    client_ids: actualClientIds,
     local_auth_status: localAuthResponse.status,
     local_auth_methods: Array.isArray(localAuth?.methods) ? localAuth.methods : [],
   };

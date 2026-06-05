@@ -5,6 +5,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
+const replacementProviderIds = ["apple", "google", "spotify"];
+const expectedClientIds = [
+  "wavey-browser",
+  "wavey-ios",
+  "bitneedle-web",
+  "infidelity-web",
+  "infidelity-macos",
+];
 
 if (isCli()) {
   runCli(process.argv.slice(2));
@@ -95,6 +103,14 @@ export function backendStatusSummary({
   const providersReady =
     providerStatus?.remote_ready === true && live?.ready === true && live?.ready_status === 200;
   const backendReady = backendBlockers.length === 0;
+  const auth0Replacement = auth0ReplacementSummary({
+    backendReady,
+    providersReady,
+    rolloutStatus,
+    liveAdminStatus,
+    providerStatus,
+    localAuthBlockers,
+  });
 
   return {
     ok: requireBackend ? backendReady : true,
@@ -122,6 +138,7 @@ export function backendStatusSummary({
       warnings: providerStatus?.warnings || [],
     },
     local_auth_summary: localAuth,
+    auth0_replacement: auth0Replacement,
     backend_blockers: backendBlockers,
     provider_blockers: providerBlockers,
     local_auth_blockers: localAuthBlockers,
@@ -132,6 +149,80 @@ export function backendStatusSummary({
       providersReady,
     }),
     command_status: commandStatus,
+  };
+}
+
+function auth0ReplacementSummary({
+  backendReady,
+  providersReady,
+  rolloutStatus = {},
+  liveAdminStatus = {},
+  providerStatus = {},
+  localAuthBlockers = [],
+}) {
+  const providers = Array.isArray(providerStatus.providers) ? providerStatus.providers : [];
+  const targetProviders = replacementProviderIds.map((id) => {
+    const provider = providers.find((item) => item.id === id) || { id };
+    const ready = provider.disabled === true ? false : provider.remote_ready === true;
+    return {
+      id,
+      label: provider.label || id,
+      disabled: provider.disabled === true,
+      ready,
+      required_for_replacement: true,
+      notes: Array.isArray(provider.notes) ? provider.notes : [],
+    };
+  });
+  const clientIds = Array.isArray(liveAdminStatus.client_ids) ? liveAdminStatus.client_ids : [];
+  const missingClients = clientIds.length > 0
+    ? expectedClientIds.filter((clientId) => !clientIds.includes(clientId))
+    : liveAdminStatus.clients_status === 200 && Number(liveAdminStatus.client_count || 0) >= expectedClientIds.length
+      ? []
+      : expectedClientIds;
+  const legacyRouteRetired =
+    rolloutStatus.zeroth_live === true &&
+    (rolloutStatus.live_backend === "zeroth_ready" || rolloutStatus.live_backend === "zeroth_not_ready");
+  const blockers = [];
+
+  if (!backendReady) {
+    blockers.push("Zeroth backend is not ready");
+  }
+  if (!providersReady) {
+    blockers.push("active Zeroth providers are not ready");
+  }
+  for (const provider of targetProviders) {
+    if (provider.disabled) {
+      blockers.push(`${provider.label} provider is disabled by deployment`);
+    } else if (!provider.ready) {
+      blockers.push(`${provider.label} provider is not ready`);
+    }
+  }
+  if (missingClients.length > 0) {
+    blockers.push(`seed missing relying clients: ${missingClients.join(", ")}`);
+  }
+  if (!legacyRouteRetired) {
+    blockers.push("id.wavey.ai is not confirmed as a Zeroth-owned route");
+  }
+  for (const blocker of localAuthBlockers) {
+    blockers.push(`local auth: ${blocker}`);
+  }
+
+  return {
+    ready: blockers.length === 0,
+    apple_google_ready: backendReady && providersReady,
+    target_provider_ids: replacementProviderIds,
+    target_providers: targetProviders,
+    expected_client_ids: expectedClientIds,
+    seeded_client_ids: clientIds,
+    missing_client_ids: missingClients,
+    legacy_route_retired: legacyRouteRetired,
+    blockers,
+    cutover_tasks: [
+      "point each relying app at issuer https://id.wavey.ai",
+      "switch app token validation to https://id.wavey.ai/.well-known/jwks.json",
+      "replace Auth0 client IDs with Zeroth registered-client IDs",
+      "remove Auth0 environment variables after app cutover is verified",
+    ],
   };
 }
 

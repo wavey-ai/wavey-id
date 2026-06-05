@@ -35,6 +35,11 @@ test("backend status passes when deployed backend is ready but providers are pen
   assert.equal(summary.backend_ready, true);
   assert.equal(summary.providers_ready, false);
   assert.equal(summary.phase, "backend_ready_provider_config_pending");
+  assert.equal(summary.auth0_replacement.ready, false);
+  assert.match(
+    summary.auth0_replacement.blockers.join("\n"),
+    /active Zeroth providers are not ready/,
+  );
   assert.deepEqual(summary.local_auth_blockers, []);
   assert.deepEqual(summary.provider_blockers, [
     "replace placeholder provider client IDs in wrangler.zeroth.jsonc",
@@ -61,6 +66,8 @@ test("backend status fails backend require when a core check is red", () => {
   assert.equal(summary.backend_ready, false);
   assert.equal(summary.phase, "backend_not_ready");
   assert.deepEqual(summary.backend_blockers, ["d1_schema_and_clients"]);
+  assert.equal(summary.auth0_replacement.ready, false);
+  assert.match(summary.auth0_replacement.blockers.join("\n"), /Zeroth backend is not ready/);
 });
 
 test("backend status reports magic link delivery blockers without failing backend readiness", () => {
@@ -77,6 +84,7 @@ test("backend status reports magic link delivery blockers without failing backen
         db_status: 200,
         clients_status: 200,
         client_count: 5,
+        client_ids: seededClientIds(),
         local_auth_status: 200,
         local_auth_methods: [
           {
@@ -98,6 +106,17 @@ test("backend status reports magic link delivery blockers without failing backen
       remote_provider_secrets_configured: true,
       remote_secrets_read: true,
       remote_ready: true,
+      providers: [
+        { id: "apple", label: "Apple", disabled: false, remote_ready: true },
+        { id: "google", label: "Google", disabled: false, remote_ready: true },
+        {
+          id: "spotify",
+          label: "Spotify",
+          disabled: true,
+          remote_ready: true,
+          notes: ["disabled_by_deployment"],
+        },
+      ],
       warnings: [],
     },
   });
@@ -109,6 +128,17 @@ test("backend status reports magic link delivery blockers without failing backen
     "magic link email delivery failed recently: email_internal_server_error",
   ]);
   assert.equal(summary.local_auth_summary.magic_link.delivery_status.lastError, "email_internal_server_error");
+  assert.equal(summary.auth0_replacement.apple_google_ready, true);
+  assert.equal(summary.auth0_replacement.ready, false);
+  assert.deepEqual(summary.auth0_replacement.missing_client_ids, []);
+  assert.match(
+    summary.auth0_replacement.blockers.join("\n"),
+    /Spotify provider is disabled by deployment/,
+  );
+  assert.match(
+    summary.auth0_replacement.blockers.join("\n"),
+    /local auth: magic link email delivery failed recently: email_internal_server_error/,
+  );
 });
 
 function rolloutStatus(overrides = {}) {
@@ -140,6 +170,7 @@ function liveAdmin(overrides = {}) {
         db_status: 200,
         clients_status: 200,
         client_count: 5,
+        client_ids: seededClientIds(),
         local_auth_status: 200,
         local_auth_methods: [
           {
@@ -153,4 +184,14 @@ function liveAdmin(overrides = {}) {
       ...overrides,
     },
   };
+}
+
+function seededClientIds() {
+  return [
+    "wavey-browser",
+    "wavey-ios",
+    "bitneedle-web",
+    "infidelity-web",
+    "infidelity-macos",
+  ];
 }

@@ -236,6 +236,15 @@ This command requires live discovery, signing config, D1 schema, seeded clients,
 Workers API access, Worker secret-list access, active provider readiness, and
 the 10 ms startup guardrail.
 
+The output separates live issuer readiness from full Auth0 retirement. A
+`phase` of `zeroth_ready` means `id.wavey.ai` is serving the Zeroth issuer and
+active providers are usable. The `auth0_replacement` block is stricter: it
+requires Apple, Google, and Spotify target provider coverage, the seeded relying
+clients, the Zeroth-owned route, and local-auth delivery evidence. Today that
+block can remain `ready:false` while Apple/Google login is usable, for example
+while Spotify is disabled by deployment or Cloudflare Email Sending has not
+proven magic-link delivery.
+
 `DEFAULT_LOGIN_CLIENT_ID` is used by legacy browser SSO entry points such as
 `/login?return_to=...` when the relying app does not send an explicit
 `client_id`.
