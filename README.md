@@ -94,7 +94,7 @@ npm run zeroth:secrets:check
 npm run zeroth:secrets
 ```
 
-To bring up Apple admin login before Google and Spotify are ready, upload only
+To bring up Apple admin login before every active provider is ready, upload only
 the Apple provider material and optional admin session allowlist:
 
 ```sh
@@ -128,11 +128,11 @@ parent folder `AppStore_AuthKey_*.p8` file is App Store Connect/admin material,
 not Zeroth provider-login material, and the Zeroth secret helper refuses to use
 it for `APPLE_PRIVATE_KEY_PATH`.
 `npm run zeroth:providers:status` reports local Apple, Google, and Spotify
-readiness without printing provider secrets. Use it before `npm run
-zeroth:secrets` to check that provider client IDs and provider secrets are all
-present. Use `npm run zeroth:providers:status:remote` after uploading secrets
-to verify the deployed Worker secret bindings by name without reading secret
-values.
+readiness without printing provider secrets. Disabled providers remain visible
+but are not required. Use it before `npm run zeroth:secrets` to check that
+active provider client IDs and provider secrets are present. Use
+`npm run zeroth:providers:status:remote` after uploading secrets to verify the
+deployed Worker secret bindings by name without reading secret values.
 `npm run zeroth:secrets:check` validates the local secret environment, Apple
 private-key path, Zeroth ES256 signing key format, Apple private-key PEM format,
 and optional previous public JWKS without writing anything to Cloudflare.
@@ -192,7 +192,8 @@ dry-run packaging, or use `npm run zeroth:rollout:require` when automation must
 fail unless the live host is fully Zeroth-ready.
 
 After deploy and secret upload, run the live verifier. It checks discovery and
-requires `GET /ready` to return `200` with `ready=true`:
+requires `GET /ready` to return `200` with `ready=true` for the active provider
+set:
 
 ```sh
 npm run zeroth:live:status
@@ -200,9 +201,10 @@ npm run zeroth:verify:live
 ```
 
 `npm run zeroth:live:status` is non-strict rollout visibility. The live host
-should report `zeroth_not_ready` until Google and Spotify provider config is
-complete, then `zeroth_ready`. Use `npm run zeroth:live:require` when a script
-must fail unless discovery is Zeroth-owned.
+should report `zeroth_ready` once all active providers pass readiness; disabled
+providers such as the current Spotify entry are omitted from public readiness.
+Use `npm run zeroth:live:require` when a script must fail unless discovery is
+Zeroth-owned.
 
 When the bootstrap token is available locally, run the admin live verifier too.
 It checks `GET /__zeroth/db/status` and the seeded registered clients so a live
@@ -216,7 +218,8 @@ npm run zeroth:verify:live:admin
 
 Before provider credentials are ready, use the bootstrap verifier to prove the
 deployed backend, admin token, D1 schema, and seeded clients are working while
-allowing `/ready` to remain red for Apple, Google, and Spotify:
+allowing `/ready` to remain red for whichever active providers are still
+missing:
 
 ```sh
 npm run zeroth:verify:live:admin:bootstrap
@@ -230,9 +233,8 @@ npm run zeroth:backend:require
 ```
 
 This command requires live discovery, signing config, D1 schema, seeded clients,
-Workers API access, Worker secret-list access, and the 10 ms startup guardrail.
-It deliberately allows provider readiness to remain pending until the Apple,
-Google, and Spotify OAuth apps and Worker secret bindings exist.
+Workers API access, Worker secret-list access, active provider readiness, and
+the 10 ms startup guardrail.
 
 `DEFAULT_LOGIN_CLIENT_ID` is used by legacy browser SSO entry points such as
 `/login?return_to=...` when the relying app does not send an explicit
@@ -439,9 +441,9 @@ schema or seed rows are visible without checking raw JSON manually.
 
 Before connecting apps, `GET https://id.wavey.ai/ready` should return `200`.
 It checks the HTTPS issuer URL, parseable Zeroth signing material, and configured
-Apple, Google, and Spotify provider credentials without reading D1 or returning
-secret values. Placeholder provider IDs or secrets are reported as unconfigured
-and keep readiness false.
+active provider credentials without reading D1 or returning secret values.
+Placeholder provider IDs or secrets on active providers are reported as
+unconfigured and keep readiness false.
 
 ## Cloudflare
 

@@ -245,17 +245,24 @@ function checkWranglerConfig(config) {
     actual: config.vars?.SESSION_COOKIE_DOMAIN,
     expected: "ASCII cookie domain without header delimiters",
   });
-  checkConfiguredValue(
+  const disabledProviders = disabledProviderSet(config);
+  checkProviderClientId(
+    disabledProviders,
+    "apple",
     "apple_client_id",
     config.vars?.APPLE_CLIENT_ID,
     "replace-with-sign-in-with-apple-service-id",
   );
-  checkConfiguredValue(
+  checkProviderClientId(
+    disabledProviders,
+    "google",
     "google_client_id",
     config.vars?.GOOGLE_CLIENT_ID,
     "replace-with-google-oauth-client-id",
   );
-  checkConfiguredValue(
+  checkProviderClientId(
+    disabledProviders,
+    "spotify",
     "spotify_client_id",
     config.vars?.SPOTIFY_CLIENT_ID,
     "replace-with-spotify-oauth-client-id",
@@ -427,6 +434,22 @@ function checkConfiguredValue(checkName, value, placeholder) {
     actual: value,
     expected: `configured value, not ${placeholder}`,
   });
+}
+
+function checkProviderClientId(disabledProviders, providerId, checkName, value, placeholder) {
+  if (disabledProviders.has(providerId)) {
+    return;
+  }
+  checkConfiguredValue(checkName, value, placeholder);
+}
+
+function disabledProviderSet(config) {
+  return new Set(
+    String(config.vars?.DISABLED_PROVIDERS || "")
+      .split(",")
+      .map((provider) => provider.trim().toLowerCase())
+      .filter(Boolean),
+  );
 }
 
 function routePattern(config) {

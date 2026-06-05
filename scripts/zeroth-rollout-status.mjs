@@ -61,7 +61,7 @@ if (providerPlaceholderFailures.length > 0) {
       .map((failure) => failure.check)
       .join(", ")}`,
   );
-  nextActions.push("create Apple/Google/Spotify OAuth apps and replace provider client IDs in wrangler.zeroth.jsonc");
+  nextActions.push("create active provider OAuth apps and replace provider client IDs in wrangler.zeroth.jsonc");
 }
 
 if (!bootstrapSecrets.ok) {
