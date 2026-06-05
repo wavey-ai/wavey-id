@@ -802,7 +802,8 @@ verifying Zeroth's JWKS/issuer/audience locally, and then set a Bitneedle-local
 session cookie for protected content. The generic
 `zeroth-oidc` crate now contains helpers for PKCE challenge calculation,
 authorization URL construction, callback parsing, token form encoding, and token
-response decoding so product Workers do not need to hand-roll those details.
+response decoding plus ES256 Zeroth token verification so product Workers do
+not need to hand-roll those details.
 
 Session/profile check from browser JS only works when the browser is allowed to
 send the `id.wavey.ai` cookie:
