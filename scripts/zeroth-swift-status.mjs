@@ -51,6 +51,7 @@ export async function swiftStatusSummary({
 } = {}) {
   const discovery = await discoveryCheck({ origin, fetchFn });
   const client = await clientCheck({ origin, adminToken, fetchFn });
+  const nativeAppleTokenExchange = await nativeAppleTokenExchangeCheck({ origin, fetchFn });
   const promptNoneRedirects = [];
   for (const redirectUri of swiftRedirectUris) {
     promptNoneRedirects.push(
@@ -65,6 +66,7 @@ export async function swiftStatusSummary({
   const checks = {
     discovery: discovery.ok,
     client_registration: client.ok,
+    native_apple_token_exchange: nativeAppleTokenExchange.ok,
     prompt_none_redirects: promptNoneRedirects.every((check) => check.ok),
   };
   const blockers = [];
@@ -73,6 +75,9 @@ export async function swiftStatusSummary({
   }
   if (!checks.client_registration) {
     blockers.push("wavey-ios client registration is missing Swift redirect URIs");
+  }
+  if (!checks.native_apple_token_exchange) {
+    blockers.push("native Apple identity-token exchange is not wired for wavey-ios");
   }
   if (!checks.prompt_none_redirects) {
     blockers.push("prompt=none does not return bounded Swift redirect errors");
@@ -86,6 +91,7 @@ export async function swiftStatusSummary({
     checks,
     discovery,
     client,
+    native_apple_token_exchange: nativeAppleTokenExchange,
     prompt_none_redirects: promptNoneRedirects,
     blockers,
   };
@@ -104,6 +110,10 @@ async function discoveryCheck({ origin, fetchFn }) {
     query_response_mode: arrayIncludes(body?.response_modes_supported, "query"),
     authorization_code_grant: arrayIncludes(body?.grant_types_supported, "authorization_code"),
     refresh_token_grant: arrayIncludes(body?.grant_types_supported, "refresh_token"),
+    token_exchange_grant: arrayIncludes(
+      body?.grant_types_supported,
+      "urn:ietf:params:oauth:grant-type:token-exchange",
+    ),
     s256_pkce: arrayIncludes(body?.code_challenge_methods_supported, "S256"),
     openid_scope: arrayIncludes(body?.scopes_supported, "openid"),
     email_scope: arrayIncludes(body?.scopes_supported, "email"),
@@ -201,6 +211,36 @@ async function promptNoneRedirectCheck({ origin, redirectUri, fetchFn }) {
     error: parameters.error || null,
     state_preserved: parameters.state === state,
     issuer_preserved: parameters.iss === origin,
+  };
+}
+
+async function nativeAppleTokenExchangeCheck({ origin, fetchFn }) {
+  const url = new URL("/oauth/token", origin);
+  const body = new URLSearchParams({
+    grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+    client_id: clientId,
+    provider: "apple",
+    subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+    subject_token: "not.a.jwt",
+    provider_client_id: "ai.wavey.id",
+    scope: "openid email profile",
+  });
+  const response = await fetchFn(url, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  const payload = await jsonBody(response);
+  const validationReached = response.status === 401 && payload?.error === "invalid_response";
+
+  return {
+    ok: validationReached,
+    status: response.status,
+    validation_reached: validationReached,
+    error: payload?.error || null,
   };
 }
 

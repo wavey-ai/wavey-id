@@ -16,7 +16,9 @@ test("Swift status verifies discovery, client registration, and bounded native r
   assert.equal(summary.ready, true);
   assert.equal(summary.checks.discovery, true);
   assert.equal(summary.checks.client_registration, true);
+  assert.equal(summary.checks.native_apple_token_exchange, true);
   assert.equal(summary.checks.prompt_none_redirects, true);
+  assert.equal(summary.native_apple_token_exchange.validation_reached, true);
   assert.deepEqual(summary.blockers, []);
 });
 
@@ -45,7 +47,11 @@ async function fakeSwiftFetch(input, options = {}) {
       authorization_endpoint: "https://id.example.com/authorize",
       token_endpoint: "https://id.example.com/oauth/token",
       response_modes_supported: ["query"],
-      grant_types_supported: ["authorization_code", "refresh_token"],
+      grant_types_supported: [
+        "authorization_code",
+        "refresh_token",
+        "urn:ietf:params:oauth:grant-type:token-exchange",
+      ],
       code_challenge_methods_supported: ["S256"],
       scopes_supported: ["openid", "profile", "email", "offline_access"],
     });
@@ -63,6 +69,22 @@ async function fakeSwiftFetch(input, options = {}) {
         "com.waveyai.auSend.auSendExtension://id.wavey.ai/ios/com.waveyai.auSend.auSendExtension/callback",
       ],
     });
+  }
+
+  if (url.pathname === "/oauth/token") {
+    assert.equal(options.method, "POST");
+    const body = new URLSearchParams(options.body);
+    assert.equal(body.get("grant_type"), "urn:ietf:params:oauth:grant-type:token-exchange");
+    assert.equal(body.get("client_id"), "wavey-ios");
+    assert.equal(body.get("provider"), "apple");
+    assert.equal(body.get("provider_client_id"), "ai.wavey.id");
+    return Response.json(
+      {
+        error: "invalid_response",
+        errorDescription: "invalid JWT base64url segment: Invalid padding",
+      },
+      { status: 401 },
+    );
   }
 
   if (url.pathname === "/authorize") {
