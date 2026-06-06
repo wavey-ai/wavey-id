@@ -12,9 +12,6 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
       CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-      AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
-      COOKIE_SECRET: ${{ secrets.COOKIE_SECRET }}
-      APPLE_APP_SITE_ASSOCIATION_JSON: ${{ secrets.APPLE_APP_SITE_ASSOCIATION_JSON }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,4 +21,3 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run deploy
-      - run: scripts/set-worker-secrets.sh

@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const replacementProviderIds = ["apple", "google", "spotify"];
+const deploymentProviderIds = ["apple", "google", "spotify"];
 const expectedClientIds = [
   "wavey-browser",
   "wavey-ios",
@@ -145,7 +145,7 @@ export function backendStatusSummary({
   const providersReady =
     providerStatus?.remote_ready === true && live?.ready === true && live?.ready_status === 200;
   const backendReady = backendBlockers.length === 0;
-  const auth0Replacement = auth0ReplacementSummary({
+  const zerothDeployment = zerothDeploymentSummary({
     backendReady,
     providersReady,
     rolloutStatus,
@@ -195,7 +195,7 @@ export function backendStatusSummary({
     persistence_summary: persistenceSummary(persistenceStatus),
     email_summary: emailSummary(emailStatus),
     swift_summary: swiftSummary(swiftStatus),
-    auth0_replacement: auth0Replacement,
+    zeroth_deployment: zerothDeployment,
     backend_blockers: backendBlockers,
     provider_blockers: providerBlockers,
     local_auth_blockers: localAuthBlockers,
@@ -215,13 +215,13 @@ export function backendStatusSummary({
       emailStatus,
       swiftBlockers,
       providersReady,
-      auth0Replacement,
+      zerothDeployment,
     }),
     command_status: commandStatus,
   };
 }
 
-function auth0ReplacementSummary({
+function zerothDeploymentSummary({
   backendReady,
   providersReady,
   rolloutStatus = {},
@@ -240,7 +240,7 @@ function auth0ReplacementSummary({
   swiftStatus,
 }) {
   const providers = Array.isArray(providerStatus.providers) ? providerStatus.providers : [];
-  const targetProviders = replacementProviderIds.map((id) => {
+  const targetProviders = deploymentProviderIds.map((id) => {
     const provider = providers.find((item) => item.id === id) || { id };
     const ready = provider.disabled === true ? false : provider.remote_ready === true;
     return {
@@ -248,7 +248,7 @@ function auth0ReplacementSummary({
       label: provider.label || id,
       disabled: provider.disabled === true,
       ready,
-      required_for_replacement: true,
+      required_for_deployment: true,
       notes: Array.isArray(provider.notes) ? provider.notes : [],
       activation_requirements: Array.isArray(provider.activation_requirements)
         ? provider.activation_requirements
@@ -261,7 +261,7 @@ function auth0ReplacementSummary({
     : liveAdminStatus.clients_status === 200 && Number(liveAdminStatus.client_count || 0) >= expectedClientIds.length
       ? []
       : expectedClientIds;
-  const legacyRouteRetired =
+  const zerothRouteOwned =
     rolloutStatus.zeroth_live === true &&
     (rolloutStatus.live_backend === "zeroth_ready" || rolloutStatus.live_backend === "zeroth_not_ready");
   const blockers = [];
@@ -282,7 +282,7 @@ function auth0ReplacementSummary({
   if (missingClients.length > 0) {
     blockers.push(`seed missing relying clients: ${missingClients.join(", ")}`);
   }
-  if (!legacyRouteRetired) {
+  if (!zerothRouteOwned) {
     blockers.push("id.wavey.ai is not confirmed as a Zeroth-owned route");
   }
   for (const blocker of localAuthBlockers) {
@@ -313,18 +313,18 @@ function auth0ReplacementSummary({
     persistence_ready: persistenceStatus?.ready ?? null,
     email_delivery_ready: emailStatus?.ready ?? null,
     swift_ready: swiftStatus?.ready ?? null,
-    target_provider_ids: replacementProviderIds,
+    target_provider_ids: deploymentProviderIds,
     target_providers: targetProviders,
     expected_client_ids: expectedClientIds,
     seeded_client_ids: clientIds,
     missing_client_ids: missingClients,
-    legacy_route_retired: legacyRouteRetired,
+    zeroth_route_owned: zerothRouteOwned,
     blockers,
-    cutover_tasks: [
+    integration_tasks: [
       "point each relying app at issuer https://id.wavey.ai",
       "switch app token validation to https://id.wavey.ai/.well-known/jwks.json",
-      "replace Auth0 client IDs with Zeroth registered-client IDs",
-      "remove Auth0 environment variables after app cutover is verified",
+      "use Zeroth registered-client IDs in relying apps",
+      "remove unused upstream identity environment variables after app integration is verified",
     ],
   };
 }
@@ -699,9 +699,9 @@ function nextActions({
   emailStatus,
   swiftBlockers,
   providersReady,
-  auth0Replacement,
+  zerothDeployment,
 }) {
-  const spotifyActions = spotifyNextActions(auth0Replacement);
+  const spotifyActions = spotifyNextActions(zerothDeployment);
   if (
     routeBlockers.length > 0 &&
     backendBlockers.length > 0 &&
@@ -841,9 +841,9 @@ function emailRepairAction(emailStatus = {}) {
   return "enable or repair Cloudflare Email Sending for wavey.ai, then request a fresh magic link";
 }
 
-function spotifyNextActions(auth0Replacement = {}) {
-  const spotify = Array.isArray(auth0Replacement.target_providers)
-    ? auth0Replacement.target_providers.find((provider) => provider.id === "spotify")
+function spotifyNextActions(zerothDeployment = {}) {
+  const spotify = Array.isArray(zerothDeployment.target_providers)
+    ? zerothDeployment.target_providers.find((provider) => provider.id === "spotify")
     : null;
   if (!spotify?.disabled) {
     return [];

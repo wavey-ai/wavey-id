@@ -310,18 +310,19 @@ Service blockers. Zeroth also supports `MAGIC_LINK_DELIVERY=resend` with
 `MAILCHANNELS_API_KEY`/`MAGIC_LINK_MAILCHANNELS_API_KEY`; in those modes the
 status command checks remote Worker secret presence and live delivery evidence.
 `npm run zeroth:backend:status` includes the same result as `email_summary` and
-adds magic-link delivery blockers to the stricter `auth0_replacement` gate.
+adds magic-link delivery blockers to the stricter `zeroth_deployment` gate.
 
-The output separates live issuer readiness from full Auth0 retirement. A
+The output separates live issuer readiness from full Zeroth deployment
+readiness. A
 `phase` of `zeroth_ready` means `id.wavey.ai` is serving the Zeroth issuer and
-active providers are usable. The `auth0_replacement` block is stricter: it
+active providers are usable. The `zeroth_deployment` block is stricter: it
 requires Apple, Google, and Spotify target provider coverage, the seeded relying
 clients, the Zeroth-owned route, D1-backed user/admin/audit persistence, and
 local-auth delivery evidence. Today that block can remain `ready:false` while
 Apple/Google login is usable, for example while Spotify is disabled by
 deployment or the selected magic-link sender has not proven delivery.
 
-`DEFAULT_LOGIN_CLIENT_ID` is used by legacy browser SSO entry points such as
+`DEFAULT_LOGIN_CLIENT_ID` is used by browser SSO compatibility entry points such as
 `/login?return_to=...` when the relying app does not send an explicit
 `client_id`.
 
@@ -384,7 +385,7 @@ The seeded public clients are:
 ```text
 wavey-browser     default browser SSO client for wavey.ai, bitneedle.com, and infidelity.io
 infidelity-macos  http://localhost/oidc-callback
-wavey-ios         wavey://auth/callback and current Auth0.swift-style iOS bundle callbacks
+wavey-ios         wavey://auth/callback and current iOS bundle callbacks
 bitneedle-web     https://bitneedle.com/auth/callback, https://www.bitneedle.com/auth/callback
 infidelity-web    https://infidelity.io/auth/callback, https://www.infidelity.io/auth/callback
 ```
@@ -399,11 +400,6 @@ Zeroth treats unported loopback client redirects such as
 `http://localhost/oidc-callback` as a native-app policy that allows an ephemeral
 loopback port on the same host/path, matching the current Infidelity Swift OIDC
 client.
-
-`wrangler.jsonc`, `src/worker.js`, and the Auth0 scripts remain only as an
-archived rollback reference. `wrangler.jsonc` now deploys the legacy code as
-`wavey-id-auth0-legacy-worker` on workers.dev and does not own the
-`id.wavey.ai/*` route.
 
 ## Runtime Shape
 
@@ -451,7 +447,7 @@ POST /logout
 
 The Zeroth discovery document uses `https://id.wavey.ai` as issuer and publishes
 Zeroth-owned ES256 JWKS. Native clients should validate Zeroth ID tokens, not
-Auth0 tokens, after cutover. Zeroth ID tokens include `email`/`email_verified`
+old upstream issuer tokens. Zeroth ID tokens include `email`/`email_verified`
 and `name`/`picture` only when the client requested the `email` and `profile`
 scopes. Authorization-code redirects use query parameters and include
 `iss=https://id.wavey.ai` so Swift and browser clients can bind responses to
@@ -550,198 +546,8 @@ DNS:
 CNAME id.wavey.ai -> wavey.ai, proxied
 ```
 
-Archived Auth0 deploy:
-
-```sh
-npm install
-npm run legacy:auth0:check
-ALLOW_LEGACY_AUTH0=1 npm run legacy:auth0:deploy:dry-run
-ALLOW_LEGACY_AUTH0=1 npm run legacy:auth0:deploy
-```
-
-Do not use the archived Auth0 deploy for `id.wavey.ai`; the route belongs to
-the Zeroth deployment in `wrangler.zeroth.jsonc`. Archived Auth0 commands that
-touch live Auth0 or Cloudflare state fail unless `ALLOW_LEGACY_AUTH0=1` is set
-for that invocation.
-
-Auth0 callback smoke test:
-
-```sh
-ALLOW_LEGACY_AUTH0=1 npm run legacy:auth0:verify
-```
-
-Secrets:
-
-```sh
-ALLOW_LEGACY_AUTH0=1 AUTH0_CLIENT_SECRET=... COOKIE_SECRET=... \
-  bash scripts/set-worker-secrets.sh
-```
-
-`COOKIE_SECRET` should be a long random value:
-
-```sh
-openssl rand -base64 32
-```
-
-If Apple web credentials are enabled, set an Apple association JSON payload:
-
-```sh
-wrangler secret put APPLE_APP_SITE_ASSOCIATION_JSON --config wrangler.jsonc
-```
-
-Example value shape:
-
-```json
-{
-  "webcredentials": {
-    "apps": [
-      "<APPLE_TEAM_ID>.ai.wavey.infidelity"
-    ]
-  }
-}
-```
-
-## Legacy Auth0 Configuration
-
-This section is migration history for the archived Auth0 Worker. It is not the
-active `id.wavey.ai` path.
-
-Auth0 tenant:
-
-```text
-wavey.eu.auth0.com
-```
-
-### Wavey ID Web Application
-
-This Auth0 application is used by the Worker-hosted browser login flow that
-sets the `wavey_id_session` cookie.
-
-Worker config:
-
-```text
-AUTH0_DOMAIN=wavey.eu.auth0.com
-AUTH0_CLIENT_ID=QdLiUA5RC81Q9o9itEAnh4CummEBksZ3
-AUTH0_CLIENT_SECRET=<set as Cloudflare secret>
-AUTH0_SCOPE=openid profile email
-```
-
-The Worker must use a client secret that belongs to this exact client ID. The
-current deployment uses the client pair already present in `io/.env`.
-
-Allowed Callback URLs:
-
-```text
-https://id.wavey.ai/oauth2/callback
-```
-
-The browser login flow will fail with Auth0 `Callback URL mismatch` until this
-callback is present on the Auth0 application.
-
-The repeatable check for this is:
-
-```sh
-ALLOW_LEGACY_AUTH0=1 npm run legacy:auth0:verify
-```
-
-If an Auth0 Management API token is available, patch the current client in one
-step:
-
-```sh
-ALLOW_LEGACY_AUTH0=1 AUTH0_MANAGEMENT_TOKEN=... npm run legacy:auth0:patch
-```
-
-Or use an Auth0 machine-to-machine app with `update:clients` access:
-
-```sh
-ALLOW_LEGACY_AUTH0=1 AUTH0_MGMT_CLIENT_ID=... AUTH0_MGMT_CLIENT_SECRET=... npm run legacy:auth0:patch
-```
-
-Allowed Logout URLs:
-
-```text
-https://id.wavey.ai/
-https://bitneedle.com/
-https://www.bitneedle.com/
-https://infidelity.io/
-https://www.infidelity.io/
-```
-
-Allowed Web Origins:
-
-```text
-https://id.wavey.ai
-https://bitneedle.com
-https://www.bitneedle.com
-https://infidelity.io
-https://www.infidelity.io
-```
-
-Allowed Origins / CORS:
-
-```text
-https://bitneedle.com
-https://www.bitneedle.com
-https://infidelity.io
-https://www.infidelity.io
-https://id.wavey.ai
-```
-
-### Infidelity macOS Native Application
-
-This Auth0 application is used by the Swift OIDC client. Login is currently
-disabled in the Infidelity UI, but the code points at this shared issuer.
-
-Native client id:
-
-```text
-QdLiUA5RC81Q9o9itEAnh4CummEBksZ3
-```
-
-Issuer URL:
-
-```text
-https://id.wavey.ai
-```
-
-Allowed Callback URLs:
-
-```text
-http://localhost:*/oidc-callback
-```
-
-If Auth0 does not accept a wildcard port for this tenant, switch the macOS app
-to a fixed loopback port or a custom URL scheme before enabling real login.
-
-Allowed Logout URLs:
-
-```text
-https://id.wavey.ai/
-https://infidelity.io/
-https://www.infidelity.io/
-```
-
-### Bitneedle
-
-Bitneedle no longer has its own `id.bitneedle.com` Worker. Use the Wavey ID web
-application above for browser login.
-
-Bitneedle return/logout URLs to allow in Auth0:
-
-```text
-https://bitneedle.com/
-https://www.bitneedle.com/
-https://bitneedle.com/dataroom/
-```
-
-### Infidelity Web
-
-Infidelity web return/logout URLs to allow in Auth0:
-
-```text
-https://infidelity.io/
-https://www.infidelity.io/
-```
+Deployment config lives in `wrangler.zeroth.jsonc`; there is no separate old
+Worker config in this repo.
 
 ## Apple Configuration
 
@@ -852,7 +658,6 @@ cleared.
 - The Worker stores browser session state in D1 and keeps only an opaque session
   id in the secure cookie.
 - No KV or Durable Object is required for the current D1-backed session model.
-- Zeroth is intended to be the shared issuer of ID tokens after cutover; Auth0
-  should only remain in deployment notes as migration history.
+- Zeroth is the shared issuer of ID tokens for this deployment.
 - `id.wavey.ai` is the only Worker that should own shared login. Do not deploy a
   separate `id.bitneedle.com` auth Worker.

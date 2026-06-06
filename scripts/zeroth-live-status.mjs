@@ -40,7 +40,6 @@ const summary = {
   },
   root: {
     status: root.status,
-    auth0_backed_copy: root.body?.includes("Shared Auth0-backed identity broker") || false,
     title: root.body?.match(/<title>([^<]+)<\/title>/i)?.[1] || null,
     error: root.error || null,
   },
@@ -56,11 +55,8 @@ function classifyBackend({ discovery, ready, root }) {
   if (discovery.body?.issuer === expectedOrigin) {
     return ready.body?.ready === true ? "zeroth_ready" : "zeroth_not_ready";
   }
-  if (typeof discovery.body?.issuer === "string" && discovery.body.issuer.includes("auth0.com")) {
-    return "auth0_legacy";
-  }
-  if (root.body?.includes("Shared Auth0-backed identity broker")) {
-    return "auth0_legacy";
+  if (typeof discovery.body?.issuer === "string" && discovery.body.issuer.length > 0) {
+    return "external_issuer";
   }
   if (ready.status === 200 && ready.body?.ready === true) {
     return "zeroth_ready";

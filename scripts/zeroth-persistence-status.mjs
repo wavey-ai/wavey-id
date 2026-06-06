@@ -28,6 +28,8 @@ const requiredTables = [
   "zeroth_admin_memberships",
   "zeroth_local_credentials",
   "zeroth_magic_links",
+  "zeroth_account_identities",
+  "zeroth_wallet_challenges",
   "zeroth_signing_keys",
   "zeroth_audit_events",
 ];
@@ -35,6 +37,7 @@ const requiredLocalAuthStorage = {
   password: "zeroth_local_credentials",
   passkey: "zeroth_passkey_credentials",
   magic_link: "zeroth_magic_links",
+  wallet_evm: "zeroth_account_identities",
 };
 
 if (isCli()) {

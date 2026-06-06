@@ -165,6 +165,7 @@ async function fakePersistenceFetch(input, options = {}) {
         { id: "password", enabled: true, credentialStorage: "zeroth_local_credentials" },
         { id: "passkey", enabled: true, credentialStorage: "zeroth_passkey_credentials" },
         { id: "magic_link", enabled: true, credentialStorage: "zeroth_magic_links" },
+        { id: "wallet_evm", enabled: true, credentialStorage: "zeroth_account_identities" },
       ],
     });
   }
@@ -197,6 +198,8 @@ function requiredTables() {
     "zeroth_admin_memberships",
     "zeroth_local_credentials",
     "zeroth_magic_links",
+    "zeroth_account_identities",
+    "zeroth_wallet_challenges",
     "zeroth_signing_keys",
     "zeroth_audit_events",
   ];

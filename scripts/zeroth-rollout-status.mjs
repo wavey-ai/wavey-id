@@ -133,11 +133,7 @@ if (withStartupCheck && !preflightChecks.worker_startup_budget?.ok) {
 
 if (live.json?.backend !== "zeroth_ready") {
   blockers.push(`live id.wavey.ai backend is ${live.json?.backend || "unknown"}`);
-  if (live.json?.backend === "auth0_legacy") {
-    nextActions.push("deploy the Zeroth Worker route once Cloudflare Workers permissions and bootstrap secrets are available");
-  } else {
-    nextActions.push("run npm run zeroth:live:status and inspect /ready provider readiness");
-  }
+  nextActions.push("run npm run zeroth:live:status and inspect /ready provider readiness");
 }
 
 const uniqueNextActions = [...new Set(nextActions)];

@@ -36,7 +36,20 @@ ensure_column() {
   exit 1
 }
 
-zeroth_cli schema --only migrations --format sql >"$SCHEMA_FILE"
+zeroth_cli schema --only migrations --format sql \
+  | awk '
+      /^ALTER TABLE zeroth_clients[[:space:]]*$/ {
+        skip = 1
+        next
+      }
+      skip && /;[[:space:]]*$/ {
+        skip = 0
+        next
+      }
+      !skip {
+        print
+      }
+    ' >"$SCHEMA_FILE"
 
 $WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
   --file "$SCHEMA_FILE"
@@ -47,17 +60,18 @@ while IFS= read -r statement; do
   fi
 done < <(zeroth_cli schema --only compatibility --format lines)
 
-$WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
-  --command "INSERT OR IGNORE INTO zeroth_schema_migrations (version, name, applied_at) VALUES (1, 'init', strftime('%s','now'))"
-
-$WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
-  --command "INSERT OR IGNORE INTO zeroth_schema_migrations (version, name, applied_at) VALUES (2, 'passkeys', strftime('%s','now'))"
-
-$WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
-  --command "INSERT OR IGNORE INTO zeroth_schema_migrations (version, name, applied_at) VALUES (3, 'admin_memberships', strftime('%s','now'))"
-
-$WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
-  --command "INSERT OR IGNORE INTO zeroth_schema_migrations (version, name, applied_at) VALUES (4, 'local_auth', strftime('%s','now'))"
+while read -r version name; do
+  $WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
+    --command "INSERT OR IGNORE INTO zeroth_schema_migrations (version, name, applied_at) VALUES ($version, '$name', strftime('%s','now'))"
+done <<'MIGRATIONS'
+1 init
+2 passkeys
+3 admin_memberships
+4 local_auth
+5 account_namespaces
+6 wallet_auth
+7 client_login_methods
+MIGRATIONS
 
 $WRANGLER d1 execute "$DATABASE" $REMOTE_FLAG --config "$CONFIG" \
   --file "$ROOT/zeroth.clients.sql"

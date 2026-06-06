@@ -35,9 +35,9 @@ test("backend status passes when deployed backend is ready but providers are pen
   assert.equal(summary.backend_ready, true);
   assert.equal(summary.providers_ready, false);
   assert.equal(summary.phase, "backend_ready_provider_config_pending");
-  assert.equal(summary.auth0_replacement.ready, false);
+  assert.equal(summary.zeroth_deployment.ready, false);
   assert.match(
-    summary.auth0_replacement.blockers.join("\n"),
+    summary.zeroth_deployment.blockers.join("\n"),
     /active Zeroth providers are not ready/,
   );
   assert.deepEqual(summary.local_auth_blockers, []);
@@ -66,8 +66,8 @@ test("backend status fails backend require when a core check is red", () => {
   assert.equal(summary.backend_ready, false);
   assert.equal(summary.phase, "backend_not_ready");
   assert.deepEqual(summary.backend_blockers, ["d1_schema_and_clients"]);
-  assert.equal(summary.auth0_replacement.ready, false);
-  assert.match(summary.auth0_replacement.blockers.join("\n"), /Zeroth backend is not ready/);
+  assert.equal(summary.zeroth_deployment.ready, false);
+  assert.match(summary.zeroth_deployment.blockers.join("\n"), /Zeroth backend is not ready/);
 });
 
 test("backend status reports magic link delivery blockers without failing backend readiness", () => {
@@ -145,20 +145,20 @@ test("backend status reports magic link delivery blockers without failing backen
     "Cloudflare Email Sending zone listing failed: Unauthorized [code: 2036]",
     "Cloudflare Email Sending DNS check failed: Unauthorized [code: 2036]",
   ]);
-  assert.equal(summary.auth0_replacement.apple_google_ready, true);
-  assert.equal(summary.auth0_replacement.email_delivery_ready, false);
-  assert.equal(summary.auth0_replacement.ready, false);
-  assert.deepEqual(summary.auth0_replacement.missing_client_ids, []);
+  assert.equal(summary.zeroth_deployment.apple_google_ready, true);
+  assert.equal(summary.zeroth_deployment.email_delivery_ready, false);
+  assert.equal(summary.zeroth_deployment.ready, false);
+  assert.deepEqual(summary.zeroth_deployment.missing_client_ids, []);
   assert.match(
-    summary.auth0_replacement.blockers.join("\n"),
+    summary.zeroth_deployment.blockers.join("\n"),
     /Spotify provider is disabled by deployment: Spotify app owner account has Premium while the app is in development mode; Spotify test login user is allowlisted in the Spotify app Users Management tab; Spotify current-user profile endpoint \/v1\/me returns HTTP 200 for an authorized user/,
   );
   assert.match(
-    summary.auth0_replacement.blockers.join("\n"),
+    summary.zeroth_deployment.blockers.join("\n"),
     /local auth: magic link email delivery failed recently: email_internal_server_error \(email\.sending\.error\.internal_server \[code: 10002\]\)/,
   );
   assert.match(
-    summary.auth0_replacement.blockers.join("\n"),
+    summary.zeroth_deployment.blockers.join("\n"),
     /Cloudflare Email Service: Cloudflare Email Service requires Workers Paid plan/,
   );
   assert.match(summary.next_actions.join("\n"), /zeroth:email:status/);
@@ -168,7 +168,7 @@ test("backend status reports magic link delivery blockers without failing backen
   assert.match(summary.next_actions.join("\n"), /DISABLED_PROVIDERS/);
 });
 
-test("backend status reports Swift readiness blockers in replacement gate", () => {
+test("backend status reports Swift readiness blockers in Zeroth deployment gate", () => {
   const summary = backendStatusSummary({
     requireBackend: true,
     rollout: rolloutStatus({
@@ -201,10 +201,10 @@ test("backend status reports Swift readiness blockers in replacement gate", () =
   assert.deepEqual(summary.swift_blockers, [
     "wavey-ios client registration is missing Swift redirect URIs",
   ]);
-  assert.equal(summary.auth0_replacement.ready, false);
-  assert.equal(summary.auth0_replacement.swift_ready, false);
+  assert.equal(summary.zeroth_deployment.ready, false);
+  assert.equal(summary.zeroth_deployment.swift_ready, false);
   assert.match(
-    summary.auth0_replacement.blockers.join("\n"),
+    summary.zeroth_deployment.blockers.join("\n"),
     /Swift\/iOS: wavey-ios client registration is missing Swift redirect URIs/,
   );
   assert.match(summary.next_actions.join("\n"), /zeroth:swift:status/);
@@ -273,12 +273,12 @@ test("backend status reports webhook email blockers without Cloudflare wording",
   assert.deepEqual(summary.email_blockers, [
     "MAGIC_LINK_WEBHOOK_URL must be a valid HTTPS URL",
   ]);
-  assert.equal(summary.auth0_replacement.ready, false);
+  assert.equal(summary.zeroth_deployment.ready, false);
   assert.match(
-    summary.auth0_replacement.blockers.join("\n"),
+    summary.zeroth_deployment.blockers.join("\n"),
     /Magic-link webhook: MAGIC_LINK_WEBHOOK_URL must be a valid HTTPS URL/,
   );
-  assert.doesNotMatch(summary.auth0_replacement.blockers.join("\n"), /Cloudflare Email Service/);
+  assert.doesNotMatch(summary.zeroth_deployment.blockers.join("\n"), /Cloudflare Email Service/);
   assert.match(summary.next_actions.join("\n"), /MAGIC_LINK_WEBHOOK_URL/);
   assert.doesNotMatch(summary.next_actions.join("\n"), /zeroth:email:send-test/);
 });
@@ -345,15 +345,15 @@ test("backend status reports direct email provider blockers without Cloudflare w
     "RESEND_API_KEY or MAGIC_LINK_RESEND_API_KEY Worker secret binding is missing",
   ]);
   assert.match(
-    summary.auth0_replacement.blockers.join("\n"),
+    summary.zeroth_deployment.blockers.join("\n"),
     /Resend magic-link email: RESEND_API_KEY/,
   );
-  assert.doesNotMatch(summary.auth0_replacement.blockers.join("\n"), /Cloudflare Email Service/);
+  assert.doesNotMatch(summary.zeroth_deployment.blockers.join("\n"), /Cloudflare Email Service/);
   assert.match(summary.next_actions.join("\n"), /RESEND_API_KEY/);
   assert.doesNotMatch(summary.next_actions.join("\n"), /zeroth:email:send-test/);
 });
 
-test("backend status reports hosted login blockers in replacement gate", () => {
+test("backend status reports hosted login blockers in Zeroth deployment gate", () => {
   const summary = backendStatusSummary({
     requireBackend: true,
     rollout: rolloutStatus({
@@ -394,16 +394,16 @@ test("backend status reports hosted login blockers in replacement gate", () => {
   assert.deepEqual(summary.login_blockers, [
     "Apple: returned HTTP 200, expected upstream redirect",
   ]);
-  assert.equal(summary.auth0_replacement.ready, false);
-  assert.equal(summary.auth0_replacement.hosted_login_ready, false);
+  assert.equal(summary.zeroth_deployment.ready, false);
+  assert.equal(summary.zeroth_deployment.hosted_login_ready, false);
   assert.match(
-    summary.auth0_replacement.blockers.join("\n"),
+    summary.zeroth_deployment.blockers.join("\n"),
     /hosted login: Apple: returned HTTP 200, expected upstream redirect/,
   );
   assert.match(summary.next_actions.join("\n"), /zeroth:login:status/);
 });
 
-test("backend status reports route alias blockers in replacement gate", () => {
+test("backend status reports route alias blockers in Zeroth deployment gate", () => {
   const summary = backendStatusSummary({
     rollout: rolloutStatus({
       live_backend: "zeroth_ready",
@@ -439,11 +439,11 @@ test("backend status reports route alias blockers in replacement gate", () => {
     "/routes is missing GET /dashboard",
     "GET /dashboard: returned router not_found",
   ]);
-  assert.match(summary.auth0_replacement.blockers.join("\n"), /routes: GET \/dashboard/);
+  assert.match(summary.zeroth_deployment.blockers.join("\n"), /routes: GET \/dashboard/);
   assert.match(summary.next_actions.join("\n"), /zeroth:routes:status/);
 });
 
-test("backend status reports D1 persistence blockers in replacement gate", () => {
+test("backend status reports D1 persistence blockers in Zeroth deployment gate", () => {
   const summary = backendStatusSummary({
     requireBackend: true,
     rollout: rolloutStatus({
@@ -491,10 +491,10 @@ test("backend status reports D1 persistence blockers in replacement gate", () =>
     "no persisted users returned from /users",
     "no persisted audit events returned from /events",
   ]);
-  assert.equal(summary.auth0_replacement.ready, false);
-  assert.equal(summary.auth0_replacement.persistence_ready, false);
+  assert.equal(summary.zeroth_deployment.ready, false);
+  assert.equal(summary.zeroth_deployment.persistence_ready, false);
   assert.match(
-    summary.auth0_replacement.blockers.join("\n"),
+    summary.zeroth_deployment.blockers.join("\n"),
     /D1 persistence: no persisted users returned from \/users/,
   );
   assert.match(summary.next_actions.join("\n"), /zeroth:persistence:status/);
