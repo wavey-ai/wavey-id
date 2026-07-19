@@ -10,7 +10,7 @@ const defaultEnvFile = ".wrangler/zeroth-bootstrap.env";
 const expectedClientIds = [
   "wavey-browser",
   "wavey-ios",
-  "bitneedle-web",
+  "yl-web",
   "infidelity-web",
   "infidelity-macos",
 ];

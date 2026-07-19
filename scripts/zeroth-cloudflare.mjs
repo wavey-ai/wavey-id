@@ -12,7 +12,7 @@ if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
     [
       "usage: node scripts/zeroth-cloudflare.mjs <command> [args...]",
       "",
-      "Runs a command with the Cloudflare credential path used by the Wavey/Bitneedle account.",
+      "Runs a command with the Cloudflare credential path used by the Wavey account.",
       "If CLOUDFLARE_API_KEY is already set, it is reused.",
       "If not, CLOUDFLARE_API_KEY_PATH or ../.cloudflare-token is read as a global API key.",
       "CLOUDFLARE_EMAIL defaults to jamie@wavey.ai.",

@@ -27,12 +27,12 @@ const expectedClientIds = [
   "wavey-browser",
   "wavey-ios",
   "infidelity-macos",
-  "bitneedle-web",
+  "yl-web",
   "infidelity-web",
 ];
 const expectedRedirectUris = [
   "https://wavey.ai/auth/callback",
-  "https://bitneedle.com/auth/callback",
+  "https://yl.vin/auth/callback",
   "https://infidelity.io/auth/callback",
   "wavey://auth/callback",
   "http://localhost/oidc-callback",

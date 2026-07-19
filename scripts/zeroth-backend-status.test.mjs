@@ -564,7 +564,7 @@ function seededClientIds() {
   return [
     "wavey-browser",
     "wavey-ios",
-    "bitneedle-web",
+    "yl-web",
     "infidelity-web",
     "infidelity-macos",
   ];

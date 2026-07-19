@@ -134,7 +134,7 @@ async function fakePersistenceFetch(input, options = {}) {
       clients: [
         "wavey-browser",
         "wavey-ios",
-        "bitneedle-web",
+        "yl-web",
         "infidelity-web",
         "infidelity-macos",
       ].map((id) => ({ id })),

@@ -2,7 +2,7 @@
 
 Shared Cloudflare Worker for `id.wavey.ai`.
 
-This service is the single Wavey-owned identity front door for Bitneedle,
+This service is the single Wavey-owned identity front door for YL,
 Infidelity, and Wavey apps. The active implementation is the generic Rust
 Zeroth Worker in `../zeroth`; this repo owns deployment configuration,
 registered clients, provider credentials, and Wavey-specific Apple association
@@ -18,7 +18,7 @@ commands use `wrangler.zeroth.jsonc` and deploy the generic Zeroth Worker as
 `id.wavey.ai` without copying auth implementation code into this repo.
 
 The `zeroth:*` Cloudflare scripts run through `scripts/zeroth-cloudflare.mjs`.
-By default it reads the Wavey/Bitneedle global API key from `../.cloudflare-token`,
+By default it reads the Wavey global API key from `../.cloudflare-token`,
 sets `CLOUDFLARE_EMAIL=jamie@wavey.ai`, and unsets any stale
 `CLOUDFLARE_API_TOKEN` before invoking Wrangler. Set `CLOUDFLARE_API_KEY_PATH`
 or `CLOUDFLARE_EMAIL` to override those defaults, or set
@@ -157,7 +157,7 @@ DISABLED_PROVIDERS=spotify
 `SESSION_COOKIE_DOMAIN=.wavey.ai` is the Zeroth-native version of the useful
 shared-cookie part of `hyper-idp`: first-party Wavey subdomains can receive the
 same HttpOnly browser session cookie. It does not make that cookie available to
-unrelated registrable domains such as `bitneedle.com` or `infidelity.io`; those
+unrelated registrable domains such as `yl.vin` or `infidelity.io`; those
 apps still use Zeroth through OIDC redirects and their own app-local sessions.
 
 Spotify is intentionally disabled in this deployment until its app/account
@@ -383,17 +383,17 @@ cargo run -p zeroth-cli -- apple-client-secret \
 The seeded public clients are:
 
 ```text
-wavey-browser     default browser SSO client for wavey.ai, bitneedle.com, and infidelity.io
+wavey-browser     default browser SSO client for wavey.ai, yl.vin, and infidelity.io
 infidelity-macos  http://localhost/oidc-callback
 wavey-ios         wavey://auth/callback and current iOS bundle callbacks
-bitneedle-web     https://bitneedle.com/auth/callback, https://www.bitneedle.com/auth/callback
+yl-web            https://yl.vin/auth/callback
 infidelity-web    https://infidelity.io/auth/callback, https://www.infidelity.io/auth/callback
 ```
 
 All seeded clients currently set `allowed_email_domains_json` to `[]`, so
 provider login is not restricted by email domain. Use Zeroth's generic
 `allowedEmailDomains` client policy later for first-party-only or admin-only
-clients; do not apply a global Wavey domain restriction to Bitneedle,
+clients; do not apply a global Wavey domain restriction to YL,
 Infidelity, native, or Spotify-facing clients.
 
 Zeroth treats unported loopback client redirects such as
@@ -581,16 +581,16 @@ Apple App Site Association payload shape:
 
 ## Relying Party URLs
 
-### Bitneedle
+### YL
 
 Interactive login URL for checking the shared Zeroth browser session:
 
 ```text
-https://id.wavey.ai/login?return_to=https%3A%2F%2Fbitneedle.com%2Fdataroom%2F
+https://id.wavey.ai/login?return_to=https%3A%2F%2Fyl.vin%2Fplay%2F
 ```
 
 That uses the deployment's `DEFAULT_LOGIN_CLIENT_ID=wavey-browser`. A narrower
-client can be selected explicitly with `client_id=bitneedle-web`.
+client can be selected explicitly with `client_id=yl-web`.
 
 Server-side product gates should use the OIDC authorization-code flow instead
 of relying on the `id.wavey.ai` cookie. Generate a random `state`, `nonce`, and
@@ -598,13 +598,13 @@ PKCE `code_verifier`, store those in the product's own short-lived callback
 state, and redirect to Zeroth:
 
 ```text
-https://id.wavey.ai/authorize?client_id=bitneedle-web&redirect_uri=https%3A%2F%2Fbitneedle.com%2Fauth%2Fcallback&response_type=code&scope=openid%20email%20profile&state=...&nonce=...&code_challenge=...&code_challenge_method=S256
+https://id.wavey.ai/authorize?client_id=yl-web&redirect_uri=https%3A%2F%2Fyl.vin%2Fauth%2Fcallback&response_type=code&scope=openid%20email%20profile&state=...&nonce=...&code_challenge=...&code_challenge_method=S256
 ```
 
-On `https://bitneedle.com/auth/callback`, verify `state` and
+On `https://yl.vin/auth/callback`, verify `state` and
 `iss=https://id.wavey.ai`, exchange the code at `POST /oauth/token` with the
 same `code_verifier`, validate the access token by calling Zeroth `/userinfo` or
-verifying Zeroth's JWKS/issuer/audience locally, and then set a Bitneedle-local
+verifying Zeroth's JWKS/issuer/audience locally, and then set a YL-local
 session cookie for protected content. The generic
 `zeroth-oidc` crate now contains helpers for PKCE challenge calculation,
 authorization URL construction, callback parsing, token form encoding, and token
@@ -626,10 +626,9 @@ Server-side Worker validation compatibility endpoint:
 https://id.wavey.ai/validate
 ```
 
-Note: browser cookies from `id.wavey.ai` are not sent to `bitneedle.com`.
-Bitneedle's dataroom login remains disabled for now with
-`BITNEEDLE_AUTH_BYPASS = "always"`. Before restoring a server-side Bitneedle
-gate, wire the callback/token handoff above and store a Bitneedle-local session.
+Note: browser cookies from `id.wavey.ai` are not sent to `yl.vin`.
+Before restoring a server-side YL gate, wire the callback/token handoff above
+and store a YL-local session.
 
 ### Infidelity
 
@@ -653,6 +652,65 @@ use when that UI is wired back up. Apple and Google web login are configured on
 `DISABLED_PROVIDERS=spotify` until the Spotify app/account restriction is
 cleared.
 
+## Resetting Wavey ID State
+
+If you want to start over with browser clients, users, sessions, and local auth
+state without redoing Apple or Google setup, keep the provider configuration
+and reset only the D1-backed Wavey ID data.
+
+Keep these unchanged:
+
+- `APPLE_CLIENT_ID`
+- `GOOGLE_CLIENT_ID`
+- `SPOTIFY_CLIENT_ID`
+- provider secrets and private keys
+- `PUBLIC_BASE_URL`
+
+Those values are deployment config, not user/client state. The reset target is
+the D1 data in tables such as `zeroth_clients`, `zeroth_users`,
+`zeroth_sessions`, `zeroth_identities`, and local-auth tables.
+
+If YL routing or callback policy changes, update [zeroth.clients.sql](./zeroth.clients.sql)
+first so the seeded relying-party clients match the new product surface. If the
+hosted login should default to that product, also update
+`DEFAULT_LOGIN_CLIENT_ID` in [wrangler.zeroth.jsonc](./wrangler.zeroth.jsonc).
+
+Do not change `PUBLIC_BASE_URL` from `https://id.wavey.ai` unless the auth
+issuer itself is moving. `yl.vin` should be registered as a relying-party
+origin/client, not become the issuer.
+
+To wipe Wavey ID browser/client state but keep the schema and provider config:
+
+```sql
+DELETE FROM zeroth_magic_links;
+DELETE FROM zeroth_local_credentials;
+DELETE FROM zeroth_passkey_challenges;
+DELETE FROM zeroth_passkey_credentials;
+DELETE FROM zeroth_wallet_challenges;
+DELETE FROM zeroth_account_identities;
+DELETE FROM zeroth_auth_transactions;
+DELETE FROM zeroth_auth_codes;
+DELETE FROM zeroth_refresh_tokens;
+DELETE FROM zeroth_sessions;
+DELETE FROM zeroth_identities;
+DELETE FROM zeroth_audit_events;
+DELETE FROM zeroth_users;
+DELETE FROM zeroth_clients;
+```
+
+Then re-seed the registered clients:
+
+```bash
+cd /Users/jamie/wavey.ai/wavey-id
+npm run zeroth:d1:init
+```
+
+That script reapplies compatibility changes if needed and then executes
+[zeroth.clients.sql](./zeroth.clients.sql) against the configured D1 database.
+
+If you want a one-shot destructive reset from the shell, run the delete batch
+through Wrangler D1 first, then run `npm run zeroth:d1:init`.
+
 ## Notes
 
 - The Worker stores browser session state in D1 and keeps only an opaque session
@@ -660,4 +718,4 @@ cleared.
 - No KV or Durable Object is required for the current D1-backed session model.
 - Zeroth is the shared issuer of ID tokens for this deployment.
 - `id.wavey.ai` is the only Worker that should own shared login. Do not deploy a
-  separate `id.bitneedle.com` auth Worker.
+  separate product-specific auth Worker.

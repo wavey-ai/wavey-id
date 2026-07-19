@@ -10,7 +10,7 @@ interface __BaseEnv_Env {
 	SESSION_COOKIE_DOMAIN: ".wavey.ai";
 	TX_COOKIE_NAME: "wavey_id_tx";
 	DEFAULT_LOGIN_CLIENT_ID: "wavey-browser";
-	LOGIN_THEMES_JSON: "{\"domains\":{\"bitneedle.com\":{\"name\":\"Bitneedle\",\"headerBackgroundFrom\":\"#ef035c\",\"headerBackgroundTo\":\"#d51b14\",\"headerTextColor\":\"#ffffff\"}}}";
+	LOGIN_THEMES_JSON: "{\"domains\":{\"yl.vin\":{\"name\":\"YL\",\"headerBackgroundFrom\":\"#ef035c\",\"headerBackgroundTo\":\"#d51b14\",\"headerTextColor\":\"#ffffff\"}}}";
 	ADMIN_EMAILS: "jamie@wavey.ai";
 	DISABLED_PROVIDERS: "spotify";
 	MAGIC_LINK_FROM: "login@wavey.ai";

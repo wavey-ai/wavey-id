@@ -9,7 +9,7 @@ const deploymentProviderIds = ["apple", "google", "spotify"];
 const expectedClientIds = [
   "wavey-browser",
   "wavey-ios",
-  "bitneedle-web",
+  "yl-web",
   "infidelity-web",
   "infidelity-macos",
 ];
