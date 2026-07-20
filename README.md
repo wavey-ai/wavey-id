@@ -4,7 +4,7 @@ Shared Cloudflare Worker for `id.wavey.ai`.
 
 This service is the single Wavey-owned identity front door for YL,
 Infidelity, and Wavey apps. The active implementation is the generic Rust
-Zeroth Worker in `../zeroth`; this repo owns deployment configuration,
+Zeroth Worker in `../zeroth`. This repo owns deployment configuration,
 registered clients, provider credentials, and Wavey-specific Apple association
 data.
 
@@ -46,10 +46,11 @@ Apply the generic schema and Wavey-owned registered clients:
 npm run zeroth:d1:init
 ```
 
-The direct D1 helper asks `zeroth-cli` for the generic schema exported by
-`zeroth-storage`, repairs compatibility columns for older test databases,
-records the generic `init` migration in `zeroth_schema_migrations`, and then
-seeds Wavey-owned clients. Inspect the generic SQL with:
+The direct D1 helper asks `zeroth-cli` for the generic schema that
+`zeroth-storage` exports. It repairs compatibility columns in older test
+databases. It records the generic `init` migration in
+`zeroth_schema_migrations` and seeds Wavey-owned clients. Inspect the generic
+SQL with:
 
 ```sh
 npm run zeroth:schema
@@ -115,31 +116,37 @@ npm run zeroth:secrets:apple
 `ADMIN_TOKEN` enables Zeroth's management APIs and the HTTP schema bootstrap
 endpoint. Use `ADMIN_TOKEN_SHA256` instead if you want to store only the
 SHA-256 hex digest of the bearer token in Cloudflare.
+
 After the first admin login, set `ADMIN_USER_IDS` or `ADMIN_EMAILS` to let the
-Zeroth browser session administer `id.wavey.ai` itself; email matches require a
-verified primary email. The admin UI has a Zeroth sign-in link that returns to
-`https://id.wavey.ai/admin`, and the same-origin API calls work without a bearer
-token once that session is allowlisted. Keep `ADMIN_TOKEN` as
-bootstrap/emergency access.
-`JWT_PREVIOUS_PUBLIC_JWKS_JSON` is optional; set it only during signing-key
+Zeroth browser session administer `id.wavey.ai` itself. Email matches require a
+verified primary email. The admin UI has a Zeroth sign-in link. It returns to
+`https://id.wavey.ai/admin`. After allowlist approval, the session can make
+same-origin API calls without a bearer token. Keep `ADMIN_TOKEN` for bootstrap
+or emergency access.
+
+`JWT_PREVIOUS_PUBLIC_JWKS_JSON` is optional. Set it only during signing-key
 rotation when existing relying apps still need retired public ES256 keys in
 Zeroth's JWKS.
+
 `npm run zeroth:apple:status` reports local Sign in with Apple readiness without
 printing key material, client secrets, or admin tokens. The local Sign in with
-Apple key cache lives under `.wrangler/zeroth/AuthKey_<KEYID>.p8`; that folder
-is ignored by Git and should contain only provider-login key material. The
-parent folder `AppStore_AuthKey_*.p8` file is App Store Connect/admin material,
-not Zeroth provider-login material, and the Zeroth secret helper refuses to use
-it for `APPLE_PRIVATE_KEY_PATH`.
+Apple key cache lives under `.wrangler/zeroth/AuthKey_<KEYID>.p8`. That folder
+is ignored by Git and should contain only provider-login key material. The parent
+folder `AppStore_AuthKey_*.p8` file contains App Store Connect admin material.
+It is not Zeroth provider-login material. The Zeroth secret helper refuses to
+use it for `APPLE_PRIVATE_KEY_PATH`.
+
 `npm run zeroth:providers:status` reports local Apple, Google, and Spotify
 readiness without printing provider secrets. Disabled providers remain visible
 but are not required. Use it before `npm run zeroth:secrets` to check that
 active provider client IDs and provider secrets are present. Use
 `npm run zeroth:providers:status:remote` after uploading secrets to verify the
 deployed Worker secret bindings by name without reading secret values.
-`npm run zeroth:secrets:check` validates the local secret environment, Apple
-private-key path, Zeroth ES256 signing key format, Apple private-key PEM format,
-and optional previous public JWKS without writing anything to Cloudflare.
+
+`npm run zeroth:secrets:check` validates the local secret environment and Apple
+private-key path. It validates the Zeroth ES256 key, Apple PEM key, and optional
+previous public JWKS. It does not write to Cloudflare.
+
 Use `npm run zeroth:signing-key -- --kid wavey-id-2026-06-04 --format json` if
 you want to archive the non-secret public JWKS record for future rotations.
 
@@ -157,16 +164,16 @@ DISABLED_PROVIDERS=spotify
 `SESSION_COOKIE_DOMAIN=.wavey.ai` is the Zeroth-native version of the useful
 shared-cookie part of `hyper-idp`: first-party Wavey subdomains can receive the
 same HttpOnly browser session cookie. It does not make that cookie available to
-unrelated registrable domains such as `yl.vin` or `infidelity.io`; those
+unrelated registrable domains such as `yl.vin` or `infidelity.io`. Those
 apps still use Zeroth through OIDC redirects and their own app-local sessions.
 
 Spotify is intentionally disabled in this deployment until its app/account
 restriction is cleared. Disabled providers remain visible in admin status, but
 they are not required for `/ready`, rollout checks, or public login buttons.
 For Spotify development-mode apps, clear that restriction by making sure the
-Spotify app owner account has Premium, the test login user is allowlisted in
-the app's Users Management tab, and Spotify's current-user profile endpoint
-`/v1/me` returns HTTP 200 after authorization. Zeroth needs that profile call
+Spotify app owner account has Premium. Add the test login user to the app's
+Users Management allowlist. After authorization, verify that Spotify's
+current-user profile endpoint `/v1/me` returns HTTP 200. Zeroth needs that call
 because Spotify does not issue an OIDC ID token for this provider path.
 
 After changing provider client IDs or the disabled-provider list, run the strict
@@ -182,19 +189,22 @@ The strict verifier and Zeroth's runtime readiness checks reject scaffold
 placeholders such as `replace-with-*`, `changeme`, and `<...>`. Use
 `npm run zeroth:verify:local` only for local template checks before the real D1
 database ID and provider client IDs exist.
-`npm run zeroth:deploy:preflight` also checks remote D1 schema access, requires
-at least the five seeded Wavey client rows, checks non-mutating Workers
-deployment and secret API access, and runs Worker dry-run packaging. If it fails
-at `worker_api_read` or `worker_secrets_read` with Cloudflare
-`Authentication error [code: 10000]`, the Cloudflare API token needs
-`Workers Scripts:Read` and `Workers Scripts:Edit` for account
-`c57bb20727aa3564966d2bb693abddce` before `npm run zeroth:secrets` or
-`npm run zeroth:deploy` can succeed.
+
+`npm run zeroth:deploy:preflight` checks remote D1 schema access and requires at
+least five seeded Wavey client rows. It checks non-mutating Workers deployment
+and secret API access. It also runs Worker dry-run packaging. If
+`worker_api_read` or `worker_secrets_read` returns Cloudflare error 10000,
+update the Cloudflare API token permissions. It needs `Workers Scripts:Read`
+and `Workers Scripts:Edit` for account
+`c57bb20727aa3564966d2bb693abddce`. These permissions are required before the
+secret or deployment commands can succeed.
+
 Use `npm run zeroth:deploy:preflight:startup` or
 `npm run zeroth:rollout:status:startup` when you also want Wrangler startup
 profiling. The startup profile parser fails the preflight when sampled startup
-active CPU exceeds the local 10 ms guardrail; inspect the numeric result with
+active CPU exceeds the local 10 ms guardrail. Inspect the numeric result with
 `npm run zeroth:startup:profile` after `npm run zeroth:startup:check`.
+
 `npm run zeroth:rollout:status` condenses config, D1, Workers API, and live-host
 state into blockers and next actions. Add `-- --with-build` to include Worker
 dry-run packaging, or use `npm run zeroth:rollout:require` when automation must
@@ -210,7 +220,7 @@ npm run zeroth:verify:live
 ```
 
 `npm run zeroth:live:status` is non-strict rollout visibility. The live host
-should report `zeroth_ready` once all active providers pass readiness; disabled
+should report `zeroth_ready` once all active providers pass readiness. Disabled
 providers such as the current Spotify entry are omitted from public readiness.
 Use `npm run zeroth:live:require` when a script must fail unless discovery is
 Zeroth-owned.
@@ -225,10 +235,9 @@ export ZEROTH_ADMIN_TOKEN="$ADMIN_TOKEN"
 npm run zeroth:verify:live:admin
 ```
 
-Before provider credentials are ready, use the bootstrap verifier to prove the
-deployed backend, admin token, D1 schema, and seeded clients are working while
-allowing `/ready` to remain red for whichever active providers are still
-missing:
+Before provider credentials are ready, use the bootstrap verifier. It verifies
+the deployed backend, admin token, D1 schema, and seeded clients. It permits
+`/ready` to remain red for active providers that are still missing:
 
 ```sh
 npm run zeroth:verify:live:admin:bootstrap
@@ -241,11 +250,10 @@ npm run zeroth:backend:status
 npm run zeroth:backend:require
 ```
 
-This command requires live discovery, signing config, D1 schema, seeded clients,
-Workers API access, Worker secret-list access, active provider readiness,
-hosted Apple/Google login redirects, public route-alias compatibility,
-D1-backed user/event/local-auth persistence evidence, and the 10 ms startup
-guardrail.
+This command requires live discovery, signing configuration, D1 schema, and
+seeded clients. It also requires Workers API and secret-list access. It checks
+provider readiness, hosted login redirects, route aliases, persistence evidence,
+and the 10 ms startup guardrail.
 
 To inspect only the D1-backed persistence surface, run:
 
@@ -253,9 +261,10 @@ To inspect only the D1-backed persistence surface, run:
 npm run zeroth:persistence:status
 ```
 
-It verifies the required Zeroth D1 tables and migrations, seeded clients,
-persisted users, at least one admin user, audit events, local-auth credential
-storage, and provider/admin status APIs without printing bearer tokens.
+It verifies the required Zeroth D1 tables, migrations, and seeded clients. It
+also verifies persisted users, an admin user, audit events, and local-auth
+credentials. It checks provider and admin status APIs without printing bearer
+tokens.
 
 To inspect only the hosted login path, run:
 
@@ -263,9 +272,9 @@ To inspect only the hosted login path, run:
 npm run zeroth:login:status
 ```
 
-It verifies that active providers set a transaction cookie and redirect to the
-expected upstream authorization host, and that deployment-disabled providers are
-not shown in the hosted picker.
+It verifies that active providers set a transaction cookie. It checks the
+redirect to the expected upstream authorization host. It also verifies that the
+hosted picker does not show deployment-disabled providers.
 
 To inspect only public Zeroth route compatibility, run:
 
@@ -273,9 +282,9 @@ To inspect only public Zeroth route compatibility, run:
 npm run zeroth:routes:status
 ```
 
-It verifies `/routes` advertises the common hosted-login, admin, callback, and
-magic-link aliases, then probes those live paths so router-level `not_found`
-regressions block the strict replacement gate.
+It verifies that `/routes` advertises the common hosted-login, admin, callback,
+and magic-link aliases. It then probes these live paths. A router-level
+`not_found` regression blocks the strict replacement gate.
 
 To prove the Spotify external account gate after fixing the app owner Premium
 and Users Management allowlist state, run:
@@ -285,9 +294,9 @@ SPOTIFY_ACCESS_TOKEN=... npm run zeroth:spotify:status
 SPOTIFY_ACCESS_TOKEN=... npm run zeroth:spotify:require
 ```
 
-The probe calls Spotify's current-user profile endpoint `/v1/me`, checks that
-the profile returns HTTP 200 with `account_id` or legacy `id` for Zeroth account
-linking, and does not print the access token or profile identifiers.
+The probe calls Spotify's current-user profile endpoint `/v1/me`. It requires
+HTTP 200 and an `account_id` or legacy `id` for Zeroth account linking. It
+does not print the access token or profile identifiers.
 
 To inspect magic-link delivery, run:
 
@@ -297,30 +306,34 @@ npm run zeroth:email:send-test
 ```
 
 Wavey currently uses Zeroth's default `MAGIC_LINK_DELIVERY=cloudflare_email`.
-Cloudflare Email Service requires an active Workers Paid account plan. The email
-status script is transport-aware: for `cloudflare_email` it checks the account
-subscriptions, the `send_email` binding, sender restrictions, Email Sending
-DNS/status APIs, and live Zeroth magic-link delivery evidence without printing
-Cloudflare credentials or admin tokens. If the deployment switches to
-`MAGIC_LINK_DELIVERY=webhook`, the same status command checks the HTTPS webhook
-configuration and live delivery evidence instead of reporting Cloudflare Email
+Cloudflare Email Service requires an active Workers Paid account plan.
+
+The email status script adapts to the selected transport. For
+`cloudflare_email`, it checks account subscriptions, the `send_email` binding,
+sender restrictions, and Email Sending status. It also checks live Zeroth
+magic-link delivery evidence. It does not print Cloudflare credentials or admin
+tokens.
+
+For `MAGIC_LINK_DELIVERY=webhook`, the command checks the HTTPS webhook
+configuration and live delivery evidence. It does not report Cloudflare Email
 Service blockers. Zeroth also supports `MAGIC_LINK_DELIVERY=resend` with
 `RESEND_API_KEY`/`MAGIC_LINK_RESEND_API_KEY`, and
 `MAGIC_LINK_DELIVERY=mailchannels` with
-`MAILCHANNELS_API_KEY`/`MAGIC_LINK_MAILCHANNELS_API_KEY`; in those modes the
+`MAILCHANNELS_API_KEY`/`MAGIC_LINK_MAILCHANNELS_API_KEY`. In those modes the
 status command checks remote Worker secret presence and live delivery evidence.
+
 `npm run zeroth:backend:status` includes the same result as `email_summary` and
 adds magic-link delivery blockers to the stricter `zeroth_deployment` gate.
 
 The output separates live issuer readiness from full Zeroth deployment
 readiness. A
 `phase` of `zeroth_ready` means `id.wavey.ai` is serving the Zeroth issuer and
-active providers are usable. The `zeroth_deployment` block is stricter: it
-requires Apple, Google, and Spotify target provider coverage, the seeded relying
-clients, the Zeroth-owned route, D1-backed user/admin/audit persistence, and
-local-auth delivery evidence. Today that block can remain `ready:false` while
-Apple/Google login is usable, for example while Spotify is disabled by
-deployment or the selected magic-link sender has not proven delivery.
+active providers are usable. The `zeroth_deployment` block has more requirements.
+
+It requires target coverage for Apple, Google, and Spotify. It also requires
+seeded clients, the Zeroth route, D1 persistence, and local-auth delivery
+evidence. That block can remain `ready:false` while Apple and Google login work.
+For example, Spotify can be disabled, or magic-link delivery can be unverified.
 
 `DEFAULT_LOGIN_CLIENT_ID` is used by browser SSO compatibility entry points such as
 `/login?return_to=...` when the relying app does not send an explicit
@@ -342,7 +355,7 @@ Apple apps or identifiers:
 
 `npm run zeroth:apple:provision` covers the API-safe part of that list. It
 creates or reuses the primary `ai.wavey.id` App ID and enables Sign in with
-Apple on that App ID. It defaults to a dry run; pass `-- --apply` to mutate
+Apple on that App ID. It defaults to a dry run. Pass `-- --apply` to mutate
 Apple Developer provisioning records:
 
 ```sh
@@ -351,23 +364,23 @@ npm run zeroth:apple:provision
 npm run zeroth:apple:provision -- --apply
 ```
 
-Apple's App Store Connect API can manage bundle IDs and their capabilities when
-called with a team API key and issuer ID, but current public API coverage does
-not include creating the Sign in with Apple Services ID or downloading a new
-Sign in with Apple private key. Those two fresh resources are Developer portal
-actions; the `AppStore_AuthKey_*.p8` API/admin key is not the provider-login
-private key that Zeroth needs.
+Apple's App Store Connect API can manage bundle IDs and their capabilities. The
+call requires a team API key and issuer ID. The public API cannot create the Sign
+in with Apple Services ID. It also cannot download a new Sign in with Apple
+private key. Create these two resources in the Developer portal. The
+`AppStore_AuthKey_*.p8` admin key is not the provider-login key that Zeroth
+needs.
 
 Apple's `APPLE_CLIENT_SECRET` is the Sign in with Apple client-secret JWT.
 Zeroth can now mint it at runtime from `APPLE_TEAM_ID`, `APPLE_KEY_ID`, and
-`APPLE_PRIVATE_KEY` or `APPLE_PRIVATE_KEY_PATH`; the secret helper stores the
+`APPLE_PRIVATE_KEY` or `APPLE_PRIVATE_KEY_PATH`. The secret helper stores the
 private key in Cloudflare as `APPLE_PRIVATE_KEY`. A static JWT is still accepted
 if `APPLE_CLIENT_SECRET` is set. Generate a static value from the generic CLI
 without mutating Apple Developer records:
 
 Do not reuse the parent-folder `../AppStore_AuthKey_*.p8` admin credential for
 Sign in with Apple provider login. Zeroth expects a fresh Sign in with Apple key,
-normally downloaded as `AuthKey_<KEYID>.p8`; the secret helper can infer
+normally downloaded as `AuthKey_<KEYID>.p8`. The secret helper can infer
 `APPLE_KEY_ID` only from that exact filename shape. Zeroth still needs the Apple
 Team ID and the Service ID used as `APPLE_CLIENT_ID`.
 
@@ -393,13 +406,13 @@ infidelity-web    https://infidelity.io/auth/callback, https://www.infidelity.io
 All seeded clients currently set `allowed_email_domains_json` to `[]`, so
 provider login is not restricted by email domain. Use Zeroth's generic
 `allowedEmailDomains` client policy later for first-party-only or admin-only
-clients; do not apply a global Wavey domain restriction to YL,
+clients. Do not apply a global Wavey domain restriction to YL,
 Infidelity, native, or Spotify-facing clients.
 
 Zeroth treats unported loopback client redirects such as
-`http://localhost/oidc-callback` as a native-app policy that allows an ephemeral
-loopback port on the same host/path, matching the current Infidelity Swift OIDC
-client.
+`http://localhost/oidc-callback` as a native-app policy. This policy permits an
+ephemeral loopback port on the same host and path. It matches the current
+Infidelity Swift OIDC client.
 
 ## Runtime Shape
 
@@ -451,22 +464,27 @@ old upstream issuer tokens. Zeroth ID tokens include `email`/`email_verified`
 and `name`/`picture` only when the client requested the `email` and `profile`
 scopes. Authorization-code redirects use query parameters and include
 `iss=https://id.wavey.ai` so Swift and browser clients can bind responses to
-this issuer. Clients that send `response_mode` must send `query`; unsupported
+this issuer.
+
+Clients that send `response_mode` must send `query`. Unsupported
 downstream response modes return `invalid_request` before provider login starts.
-Provider callback state is consumed with a conditional D1 update before Zeroth
-exchanges an Apple, Google, or Spotify code or creates local sessions/codes, so
-a replayed or raced provider callback returns `invalid_request`. The callback
-state must also match Zeroth's short-lived HttpOnly transaction cookie, scoped to
-`/oauth2/callback` and marked `SameSite=None` for Apple's `form_post`. Clients
-can use `prompt=none` for silent SSO: an active Zeroth
-browser session that satisfies `max_age` returns a code, while a missing or
-too-old session returns `login_required` on the registered redirect. Use
-`prompt=login` or `max_age=0` when a Swift or browser client needs fresh
-provider authentication. Once a client redirect URI has been validated,
-authorization request failures return to that same redirect with `error`,
-original `state`, and `iss` rather than JSON. Discovery also advertises
-`https://id.wavey.ai/logout` as the OIDC end-session endpoint; post-logout
-redirects are accepted only for the resolved registered client.
+
+Zeroth consumes provider callback state with a conditional D1 update. It does
+this before it exchanges a provider code or creates local sessions and codes. A
+replayed or raced callback returns `invalid_request`. The callback state must
+match Zeroth's short-lived HttpOnly transaction cookie. The cookie uses the
+`/oauth2/callback` path and `SameSite=None` for Apple's `form_post`.
+
+Clients can use `prompt=none` for silent SSO. An active browser session that
+satisfies `max_age` returns a code. A missing or old session returns
+`login_required` on the registered redirect. Use `prompt=login` or `max_age=0`
+when a client needs fresh provider authentication.
+
+After Zeroth validates a client redirect URI, authorization failures return to
+that redirect. The response contains `error`, original `state`, and `iss`
+instead of JSON. Discovery advertises `https://id.wavey.ai/logout` as the OIDC
+end-session endpoint. Zeroth accepts post-logout redirects only for the resolved
+registered client.
 
 Registered clients can be seeded with `zeroth.clients.sql` or managed after
 deploy through Zeroth itself. The admin gate accepts the bootstrap bearer token
@@ -477,13 +495,14 @@ session CORS checks reject that client from D1:
 
 Zeroth authorization codes are consumed with a conditional D1 update before
 credentials are minted, so a replayed or raced code returns `invalid_grant`.
-Refresh tokens are rotated on every refresh-token grant and are bound to the
+Each refresh-token grant rotates its refresh token. The token is bound to the
 browser session that created the authorization code, including silent
-`prompt=none` SSO, and preserve the original `auth_time` in refreshed ID tokens.
+`prompt=none` SSO. Refreshed ID tokens preserve the original `auth_time`.
+
 The replacement refresh token is issued only after the conditional D1 rotation
-update wins. If a rotated token is presented again by the same client, or if the
-rotation loses a race, Zeroth revokes the active session-scoped token family
-before returning `invalid_grant`. Session logout and user-initiated session
+update wins. If the same client presents a rotated token again, Zeroth revokes
+the active session-scoped token family. It does the same if the rotation loses a
+race. Zeroth then returns `invalid_grant`. Session logout and user-initiated session
 revocation also revoke the refresh-token family bound to that browser session.
 
 ```sh
@@ -514,11 +533,12 @@ https://id.wavey.ai/admin/clients
 ```
 
 Use the bootstrap token on first launch. After provider login succeeds, sign in
-from `/admin`, copy the created user ID or verified email into `ADMIN_USER_IDS`
-or `ADMIN_EMAILS`, upload secrets again, and then the `id.wavey.ai` admin UI can
-administer Zeroth through its own browser session. The admin UI shows the D1
-schema/client preflight before loading users, events, and clients, so missing
-schema or seed rows are visible without checking raw JSON manually.
+from `/admin`. Copy the created user ID or verified email into
+`ADMIN_USER_IDS` or `ADMIN_EMAILS`. Upload the secrets again. The
+`id.wavey.ai` admin UI can then use its browser session to administer Zeroth.
+
+The admin UI shows the D1 schema and client preflight before it loads management
+data. Missing schema or seed rows are visible without a manual raw JSON check.
 
 Before connecting apps, `GET https://id.wavey.ai/ready` should return `200`.
 It checks the HTTPS issuer URL, parseable Zeroth signing material, and configured
@@ -546,7 +566,7 @@ DNS:
 CNAME id.wavey.ai -> wavey.ai, proxied
 ```
 
-Deployment config lives in `wrangler.zeroth.jsonc`; there is no separate old
+Deployment config lives in `wrangler.zeroth.jsonc`. There is no separate old
 Worker config in this repo.
 
 ## Apple Configuration
@@ -602,14 +622,14 @@ https://id.wavey.ai/authorize?client_id=yl-web&redirect_uri=https%3A%2F%2Fyl.vin
 ```
 
 On `https://yl.vin/auth/callback`, verify `state` and
-`iss=https://id.wavey.ai`, exchange the code at `POST /oauth/token` with the
-same `code_verifier`, validate the access token by calling Zeroth `/userinfo` or
-verifying Zeroth's JWKS/issuer/audience locally, and then set a YL-local
-session cookie for protected content. The generic
-`zeroth-oidc` crate now contains helpers for PKCE challenge calculation,
-authorization URL construction, callback parsing, token form encoding, and token
-response decoding plus ES256 Zeroth token verification so product Workers do
-not need to hand-roll those details.
+`iss=https://id.wavey.ai`. Exchange the code at `POST /oauth/token` with the
+same `code_verifier`. Validate the access token through Zeroth `/userinfo` or
+local JWKS, issuer, and audience checks. Then, set a YL-local session cookie for
+protected content.
+
+The generic `zeroth-oidc` crate provides helpers for PKCE, authorization URLs,
+callback parsing, token forms, and token responses. It also verifies ES256
+Zeroth tokens. Product Workers do not need to implement these functions.
 
 Session/profile check from browser JS only works when the browser is allowed to
 send the `id.wavey.ai` cookie:
@@ -648,15 +668,15 @@ https://id.wavey.ai
 
 macOS login is still disabled in the current app UI. Zeroth is the issuer to
 use when that UI is wired back up. Apple and Google web login are configured on
-`id.wavey.ai`; Spotify is present as a configured provider but disabled by
+`id.wavey.ai`. Spotify is present as a configured provider but disabled by
 `DISABLED_PROVIDERS=spotify` until the Spotify app/account restriction is
 cleared.
 
 ## Resetting Wavey ID State
 
-If you want to start over with browser clients, users, sessions, and local auth
-state without redoing Apple or Google setup, keep the provider configuration
-and reset only the D1-backed Wavey ID data.
+To start over with browser clients, users, sessions, and local authentication,
+keep the provider configuration. Reset only the D1-backed Wavey ID data. You do
+not need to repeat the Apple or Google setup.
 
 Keep these unchanged:
 
